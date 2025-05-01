@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Issue, IssueStatus } from '@/types/issue';
 import { format } from 'date-fns';
-import { MapPin, Tag, Calendar, Info, Filter } from 'lucide-react'; // Import icons
+import { MapPin, Tag, Calendar, Info, Filter, AlertCircle } from 'lucide-react'; // Import icons
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
+
 
 // Mock data fetching function - Replace with actual Firebase query
 const mockFetchIssues = async (userId: string): Promise<Issue[]> => {

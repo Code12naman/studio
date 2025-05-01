@@ -10,8 +10,11 @@ import { Issue, IssueStatus, IssueType } from '@/types/issue';
 import { format } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle } from 'lucide-react';
+import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle, AlertCircle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
 
 // Mock data fetching function - Replace with actual Firebase query for ALL issues
 const mockFetchAllIssues = async (): Promise<Issue[]> => {
@@ -99,7 +102,7 @@ export default function AdminDashboardPage() {
       }
     };
     loadIssues();
-  }, []);
+  }, [toast]); // Added toast to dependency array as it's used inside useEffect
 
    // Apply filters and search whenever dependencies change
    useEffect(() => {
@@ -346,6 +349,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-// Need to import Tooltip components used within the loop
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
