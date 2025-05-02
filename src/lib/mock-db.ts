@@ -2,7 +2,7 @@ import type { Issue, IssuePriority } from '@/types/issue';
 import { addDays } from 'date-fns'; // Import addDays
 
 // Function to calculate due date based on priority
-const calculateDueDate = (reportedAt: number, priority: IssuePriority): number => {
+export const calculateDueDate = (reportedAt: number, priority: IssuePriority): number => {
   const reportedDate = new Date(reportedAt);
   switch (priority) {
     case 'High':
@@ -24,11 +24,11 @@ export let allIssuesData: Issue[] = [
     description: 'A large pothole near the intersection of Main St and 1st Ave is causing traffic issues.',
     type: 'Road',
     priority: 'High',
-    location: { latitude: 34.0522, longitude: -118.2437, address: 'Main St & 1st Ave' },
+    location: { latitude: 34.0522, longitude: -118.2437, address: '100 Main St, Los Angeles' },
     status: 'Pending',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 10).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 10).getTime(), 'High'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 10).getTime(), 'High'),
     imageUrl: 'https://picsum.photos/seed/issue1/400/300',
   },
   {
@@ -37,11 +37,11 @@ export let allIssuesData: Issue[] = [
     description: 'The streetlight at Elm St park entrance is not working.',
     type: 'Streetlight',
     priority: 'Medium',
-    location: { latitude: 34.0550, longitude: -118.2450, address: 'Elm St Park' },
+    location: { latitude: 34.0550, longitude: -118.2450, address: '50 Elm St, Los Angeles' },
     status: 'In Progress',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 15).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 15).getTime(), 'Medium'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 15).getTime(), 'Medium'),
     assignedTo: 'Dept. of Public Works',
     imageUrl: 'https://picsum.photos/seed/issue2/400/300',
   },
@@ -51,11 +51,11 @@ export let allIssuesData: Issue[] = [
     description: 'Public garbage bin at the bus stop on Oak Ave is overflowing.',
     type: 'Garbage',
     priority: 'Low',
-    location: { latitude: 34.0500, longitude: -118.2400, address: 'Oak Ave Bus Stop' },
+    location: { latitude: 34.0500, longitude: -118.2400, address: '25 Oak Ave, Los Angeles' },
     status: 'Resolved',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 1).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 1).getTime(), 'Low'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 1).getTime(), 'Low'),
     resolvedAt: new Date(2024, 5, 3).getTime(),
     imageUrl: 'https://picsum.photos/seed/issue3/400/300',
   },
@@ -65,11 +65,11 @@ export let allIssuesData: Issue[] = [
     description: 'A bench in Central Park is broken and unsafe.',
     type: 'Park',
     priority: 'Medium',
-    location: { latitude: 34.0600, longitude: -118.2500, address: 'Central Park' },
+    location: { latitude: 34.0600, longitude: -118.2500, address: 'Central Park, Los Angeles' },
     status: 'Pending',
     reportedById: 'citizen456',
     reportedAt: new Date(2024, 5, 18).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 18).getTime(), 'Medium'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 18).getTime(), 'Medium'),
     imageUrl: 'https://picsum.photos/seed/issue4/400/300',
   },
   {
@@ -78,11 +78,11 @@ export let allIssuesData: Issue[] = [
     description: 'Someone dumped trash behind the old factory on Industrial Rd.',
     type: 'Other',
     priority: 'High',
-    location: { latitude: 34.0400, longitude: -118.2300, address: 'Industrial Rd' },
+    location: { latitude: 34.0400, longitude: -118.2300, address: '1 Industrial Rd, Los Angeles' },
     status: 'In Progress',
     reportedById: 'citizen789',
     reportedAt: new Date(2024, 5, 19).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 19).getTime(), 'High'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 19).getTime(), 'High'),
     assignedTo: 'Sanitation Dept.',
     imageUrl: 'https://picsum.photos/seed/issue5/400/300',
   },
@@ -92,11 +92,11 @@ export let allIssuesData: Issue[] = [
     description: 'Stop sign at Corner St & Avenue B is bent.',
     type: 'Road',
     priority: 'Medium',
-    location: { latitude: 34.0700, longitude: -118.2600, address: 'Corner St & Avenue B' },
+    location: { latitude: 34.0700, longitude: -118.2600, address: 'Corner St & Avenue B, Los Angeles' },
     status: 'Pending',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 20).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 20).getTime(), 'Medium'), // Updated dueDate calculation
+    dueDate: calculateDueDate(new Date(2024, 5, 20).getTime(), 'Medium'),
     imageUrl: 'https://picsum.photos/seed/issue6/400/300',
   },
 ];
@@ -147,6 +147,3 @@ export const deleteIssueFromDb = (issueId: string): boolean => {
     allIssuesData = allIssuesData.filter(issue => issue.id !== issueId);
     return allIssuesData.length < initialLength;
 };
-
-// Re-export calculateDueDate if needed elsewhere
-export { calculateDueDate };

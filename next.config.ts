@@ -16,6 +16,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // Add leaflet tile servers
+      {
+        protocol: 'https',
+        hostname: '*.tile.openstreetmap.org', // Allows a.tile, b.tile, etc.
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };
