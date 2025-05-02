@@ -1,3 +1,4 @@
+
  "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -8,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { useToast } from "@/hooks/use-toast";
 import { Issue, IssueType } from '@/types/issue';
 import { addIssueToDb } from '@/lib/mock-db'; // Import add function from mock DB
 import { getCurrentLocation, Coordinate } from '@/services/geolocation';
-import { MapPin, Loader2, Send, Upload, X, Image as ImageIcon, Camera, ScanSearch } from 'lucide-react'; // Added Camera, ScanSearch
+import { MapPin, Loader2, Send, Upload, X, Image as ImageIcon, Camera, ScanSearch, AlertCircle } from 'lucide-react'; // Added Camera, ScanSearch, AlertCircle
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"; // Import Dialog
 import { analyzeIssueImage, AnalyzeIssueImageOutput } from '@/ai/flows/analyze-issue-image-flow'; // Import AI flow
@@ -62,23 +63,36 @@ const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Othe
 
 
 export default function ReportIssuePage() {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [type, setType] = useState<IssueType | ''>('');
+  const searchParams = useSearchParams(); // Get query parameters
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // State Initialization with potential pre-fill from query params
+  const initialImageDataUri = searchParams.get('imageDataUri');
+  const initialType = searchParams.get('type') as IssueType | '';
+  const initialTitle = searchParams.get('title') ?? '';
+  const initialDescription = searchParams.get('description') ?? '';
+
+  const [title, setTitle] = useState(initialTitle);
+  const [description, setDescription] = useState(initialDescription);
+  const [type, setType] = useState<IssueType | ''>(initialType);
   const [location, setLocation] = useState<Coordinate | null>(null);
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'fetching' | 'success' | 'error'>('idle');
+  const [manualAddress, setManualAddress] = useState<string>(''); // For manual location input
+  const [useManualLocation, setUseManualLocation] = useState<boolean>(false); // Toggle for manual location
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'fetching' | 'success' | 'error' | 'manual'>('idle');
   const [locationError, setLocationError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null); // Store the selected image file
-  const [imagePreview, setImagePreview] = useState<string | null>(null); // For showing image preview (can be file blob or data URI)
+  const [imagePreview, setImagePreview] = useState<string | null>(initialImageDataUri ? decodeURIComponent(initialImageDataUri) : null); // For showing image preview
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(false); // General form submission loading
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const [aiAnalysisResult, setAiAnalysisResult] = useState<AnalyzeIssueImageOutput | null>(null);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AnalyzeIssueImageOutput | null>(
+      initialType ? { detectedType: initialType, suggestedTitle: initialTitle, suggestedDescription: initialDescription } : null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const router = useRouter();
-  const { toast } = useToast();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +104,8 @@ export default function ReportIssuePage() {
     setLocationStatus('fetching');
     setLocationError(null);
     setLocation(null); // Clear previous location on retry
+    setManualAddress(''); // Clear manual address
+    setUseManualLocation(false); // Default back to auto-fetch
     try {
       const coords = await getCurrentLocation();
       setLocation(coords);
@@ -112,8 +128,11 @@ export default function ReportIssuePage() {
   }, [toast]); // Add toast as dependency
 
    useEffect(() => {
-     fetchLocation(); // Fetch location on component mount
-   }, [fetchLocation]); // Add fetchLocation to dependency array
+     // Only fetch location if not using manual or coming from camera prefill
+     if (!useManualLocation && locationStatus !== 'manual') {
+         fetchLocation();
+     }
+   }, [fetchLocation, useManualLocation, locationStatus]); // Rerun if fetchLocation, useManualLocation, or status changes
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -240,11 +259,11 @@ export default function ReportIssuePage() {
         try {
           const result = await analyzeIssueImage({ imageDataUri: imagePreview });
           setAiAnalysisResult(result);
-          // Auto-fill form fields
-          if (result.detectedType) setType(result.detectedType);
-          if (result.suggestedTitle) setTitle(result.suggestedTitle);
-          if (result.suggestedDescription) setDescription(result.suggestedDescription);
-          toast({ title: "Analysis Complete", description: `Suggested type: ${result.detectedType}` });
+          // Auto-fill form fields ONLY if they are currently empty or were default
+          if (!title || title === initialTitle) setTitle(result.suggestedTitle);
+          if (!description || description === initialDescription) setDescription(result.suggestedDescription);
+          if (!type || type === initialType) setType(result.detectedType);
+          toast({ title: "Analysis Complete", description: `AI suggested type: ${result.detectedType}. Fields updated where empty.` });
         } catch (error: any) {
           console.error("AI Analysis failed:", error);
           toast({ title: "Analysis Failed", description: error.message || "Could not analyze the image.", variant: "destructive" });
@@ -253,25 +272,61 @@ export default function ReportIssuePage() {
         }
    };
 
+   const handleToggleManualLocation = () => {
+      const nextManualState = !useManualLocation;
+      setUseManualLocation(nextManualState);
+      if (nextManualState) {
+          setLocationStatus('manual');
+          setLocation(null); // Clear automatic location
+          setLocationError(null);
+      } else {
+          // Switch back to automatic, refetch location
+          fetchLocation();
+      }
+   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title || !description || !type || !location) {
+     let finalLocation: { latitude: number; longitude: number; address?: string };
+     let finalAddress: string | undefined = undefined;
+
+     if (useManualLocation) {
+        if (!manualAddress) {
+            toast({
+                title: "Manual Location Required",
+                description: "Please enter an address or intersection for manual location.",
+                variant: "destructive",
+            });
+            return;
+        }
+         // Use a placeholder coordinate for manual address - in real app, geocode this
+         finalLocation = { latitude: 0, longitude: 0, address: manualAddress };
+         finalAddress = manualAddress;
+         // TODO: Implement geocoding service call here to get lat/lon from manualAddress
+         // For now, we'll proceed with 0,0 and the address string
+         console.warn("Manual address used. Geocoding not implemented, using placeholder coordinates (0,0).");
+     } else if (locationStatus === 'success' && location) {
+         finalLocation = location;
+         // Optional: Add reverse geocoding here if needed to get address from lat/lon
+     } else {
+         toast({
+           title: "Location Required",
+           description: useManualLocation ? "Please enter an address." : "Please ensure location is fetched or switch to manual entry.",
+           variant: "destructive",
+         });
+         return;
+     }
+
+
+    if (!title || !description || !type) {
       toast({
         title: "Incomplete Form",
-        description: "Please fill in title, description, type, and ensure location is fetched.",
+        description: "Please fill in title, description, and type.",
         variant: "destructive",
       });
       return;
     }
-     if (locationStatus !== 'success') {
-        toast({
-          title: "Location Required",
-          description: "Please ensure your location has been successfully fetched or try fetching it again.",
-          variant: "destructive",
-        });
-        return;
-      }
 
 
     setLoading(true);
@@ -305,7 +360,11 @@ export default function ReportIssuePage() {
         title,
         description,
         type,
-        location,
+        location: { // Ensure location includes coordinates and potentially the manual address
+            latitude: finalLocation.latitude,
+            longitude: finalLocation.longitude,
+            address: finalAddress || finalLocation.address // Use manual address if provided
+        },
         imageUrl, // Add the uploaded image URL
         userId,
       });
@@ -338,7 +397,7 @@ export default function ReportIssuePage() {
         <form onSubmit={handleSubmit} className="space-y-6">
            {/* Image Upload/Camera Section */}
            <div className="space-y-2">
-             <Label htmlFor="image">Issue Photo</Label>
+             <Label htmlFor="image">Issue Photo (Optional)</Label>
              <div className="flex flex-wrap items-center gap-4">
                  {/* File Upload */}
                 <Button
@@ -381,6 +440,7 @@ export default function ReportIssuePage() {
                             {/* Permission Denied Alert */}
                             {hasCameraPermission === false && (
                                 <Alert variant="destructive" className="absolute bottom-2 left-2 right-2">
+                                <AlertCircle className="h-4 w-4 mr-2"/>
                                 <AlertTitle>Camera Access Denied</AlertTitle>
                                 <AlertDescription>
                                     Please enable camera permissions to use this feature.
@@ -449,13 +509,13 @@ export default function ReportIssuePage() {
                     Uploading image...
                   </div>
              )}
-             {/* Display AI Analysis Result */}
-            {aiAnalysisResult && (
-                <Alert variant="default" className="mt-2">
-                    <ScanSearch className="h-4 w-4" />
-                    <AlertTitle>AI Analysis Suggestion</AlertTitle>
+             {/* Display AI Analysis Result (Informational) */}
+            {aiAnalysisResult && !isAnalyzing && ( // Show only when not actively analyzing
+                <Alert variant="default" className="mt-2 bg-primary/10 border-primary/30">
+                    <ScanSearch className="h-4 w-4 text-primary" />
+                    <AlertTitle className="text-primary">AI Suggestion</AlertTitle>
                     <AlertDescription>
-                        Type: {aiAnalysisResult.detectedType}, Title: {aiAnalysisResult.suggestedTitle}
+                        AI suggested: Type: {aiAnalysisResult.detectedType}, Title: '{aiAnalysisResult.suggestedTitle}'. Feel free to edit below.
                     </AlertDescription>
                 </Alert>
             )}
@@ -510,44 +570,68 @@ export default function ReportIssuePage() {
 
           {/* Location Section */}
           <div className="space-y-2">
-            <Label>Location</Label>
-             <div className="flex items-center gap-4 p-3 border rounded-md bg-secondary/50">
-                <MapPin className={`h-6 w-6 shrink-0 ${locationStatus === 'success' ? 'text-green-600' : locationStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />
-                <div className="flex-1 text-sm min-w-0"> {/* Added min-w-0 for flex shrink */}
-                 {locationStatus === 'idle' && <span className="text-muted-foreground">Initializing location services...</span>}
-                 {locationStatus === 'fetching' && (
-                    <span className="text-muted-foreground flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Getting current location...
-                    </span>
-                 )}
-                 {locationStatus === 'success' && location && (
-                    <span className="text-foreground font-medium truncate">
-                        Acquired: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                    </span>
-                 )}
-                 {locationStatus === 'error' && (
-                    <span className="text-destructive font-medium truncate">
-                       {locationError || 'Failed to get location.'}
-                    </span>
-                 )}
-                </div>
+            <div className="flex justify-between items-center">
+                <Label>Location</Label>
                 <Button
                     type="button"
-                    variant="ghost"
+                    variant="link"
                     size="sm"
-                    onClick={fetchLocation}
-                    disabled={locationStatus === 'fetching' || loading}
-                    aria-label="Refetch location"
-                    className="shrink-0" // Prevent button from shrinking too much
+                    onClick={handleToggleManualLocation}
+                    disabled={loading || locationStatus === 'fetching'}
+                    className="text-xs h-auto p-0"
                 >
-                     {locationStatus === 'fetching' ? (
-                         <Loader2 className="h-4 w-4 animate-spin" />
-                     ) : (
-                         'Retry'
-                     )}
+                    {useManualLocation ? 'Use Current Location' : 'Enter Address Manually'}
                 </Button>
-             </div>
-              {locationStatus === 'error' && (
+            </div>
+
+            {useManualLocation ? (
+                 <Input
+                    id="manualAddress"
+                    placeholder="Enter address or intersection..."
+                    value={manualAddress}
+                    onChange={(e) => setManualAddress(e.target.value)}
+                    disabled={loading}
+                    required // Make required if manual mode is chosen
+                 />
+            ) : (
+                 <div className="flex items-center gap-4 p-3 border rounded-md bg-secondary/50 min-h-[58px]"> {/* Added min-height */}
+                    <MapPin className={`h-6 w-6 shrink-0 ${locationStatus === 'success' ? 'text-green-600' : locationStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />
+                    <div className="flex-1 text-sm min-w-0"> {/* Added min-w-0 */}
+                    {locationStatus === 'idle' && <span className="text-muted-foreground">Initializing...</span>}
+                    {locationStatus === 'fetching' && (
+                        <span className="text-muted-foreground flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Fetching...
+                        </span>
+                    )}
+                    {locationStatus === 'success' && location && (
+                        <span className="text-foreground font-medium truncate">
+                            Lat: {location.latitude.toFixed(4)}, Lon: {location.longitude.toFixed(4)}
+                        </span>
+                    )}
+                    {locationStatus === 'error' && (
+                        <span className="text-destructive font-medium truncate">
+                        {locationError || 'Failed to get location.'}
+                        </span>
+                    )}
+                    </div>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={fetchLocation}
+                        disabled={locationStatus === 'fetching' || loading}
+                        aria-label="Refetch location"
+                        className="shrink-0" // Prevent shrinking
+                    >
+                        {locationStatus === 'fetching' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            'Retry'
+                        )}
+                    </Button>
+                 </div>
+             )}
+              {(locationStatus === 'error' && !useManualLocation) && ( // Show error only if not in manual mode
                  <Alert variant="destructive" className="mt-2">
                    <AlertCircle className="h-4 w-4" />
                    <AlertTitle>Location Error</AlertTitle>
@@ -559,7 +643,7 @@ export default function ReportIssuePage() {
           <Button
              type="submit"
              className="w-full"
-             disabled={loading || locationStatus !== 'success' || isUploading || isAnalyzing} // Disable during submission, if location failed, uploading or analyzing
+             disabled={loading || isUploading || isAnalyzing || (locationStatus !== 'success' && !useManualLocation) || (useManualLocation && !manualAddress)}
            >
             {(loading || isUploading || isAnalyzing) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             {isAnalyzing ? 'Analyzing...' : isUploading ? 'Uploading...' : loading ? 'Submitting...' : 'Submit Report'}

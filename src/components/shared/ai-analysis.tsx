@@ -3,11 +3,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { analyzeIssueImage, AnalyzeIssueImageOutput } from '@/ai/flows/analyze-issue-image-flow';
-import { Loader2, Camera, ScanSearch, AlertCircle, Image as ImageIcon, RefreshCcw } from 'lucide-react';
+import { Loader2, Camera, ScanSearch, AlertCircle, Image as ImageIcon, RefreshCcw, ArrowRight } from 'lucide-react';
 
 interface AiAnalysisComponentProps {
   onClose: () => void; // Function to close the dialog
@@ -23,6 +24,7 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   // Request camera permission and start stream
   useEffect(() => {
@@ -72,9 +74,17 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageDataUri = canvas.toDataURL('image/png');
+        const imageDataUri = canvas.toDataURL('image/png'); // Use PNG for potentially better quality than default JPEG
         setImagePreview(imageDataUri);
         setAiAnalysisResult(null); // Reset previous analysis if capturing new image
+
+        // Stop the camera stream after capture to save resources
+        if (videoRef.current.srcObject) {
+           const stream = videoRef.current.srcObject as MediaStream;
+           stream.getTracks().forEach(track => track.stop());
+           videoRef.current.srcObject = null;
+        }
+
       }
     } else {
       toast({
@@ -100,7 +110,7 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
     try {
       const result = await analyzeIssueImage({ imageDataUri: imagePreview });
       setAiAnalysisResult(result);
-      toast({ title: 'Analysis Complete', description: `Suggested type: ${result.detectedType}` });
+      toast({ title: 'Analysis Complete', description: `AI suggested type: ${result.detectedType}` });
     } catch (error: any) {
       console.error('AI Analysis failed:', error);
       toast({ title: 'Analysis Failed', description: error.message || 'Could not analyze the image.', variant: 'destructive' });
@@ -109,7 +119,27 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
     }
   };
 
-  const resetAnalysis = () => {
+  const handleUseImageAndData = () => {
+    if (!imagePreview) {
+        toast({ title: 'No Image', description: 'Please capture an image first.', variant: 'destructive' });
+        return;
+    }
+
+    const queryParams = new URLSearchParams();
+    queryParams.set('imageDataUri', encodeURIComponent(imagePreview)); // Encode data URI
+
+    if (aiAnalysisResult) {
+        queryParams.set('type', aiAnalysisResult.detectedType);
+        queryParams.set('title', aiAnalysisResult.suggestedTitle);
+        queryParams.set('description', aiAnalysisResult.suggestedDescription);
+    }
+
+    onClose(); // Close the dialog first
+    router.push(`/citizen/dashboard/report?${queryParams.toString()}`);
+  };
+
+
+  const resetCapture = () => {
       setImagePreview(null);
       setAiAnalysisResult(null);
       // Restart camera stream if permission was granted
@@ -120,7 +150,21 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
                videoRef.current.srcObject = stream;
              }
            })
-           .catch(err => console.error("Failed to restart camera:", err));
+           .catch(err => {
+                console.error("Failed to restart camera:", err)
+                toast({
+                    title: 'Camera Error',
+                    description: 'Could not restart the camera.',
+                    variant: 'destructive',
+                 });
+                 setHasCameraPermission(false); // Assume permission might be revoked or error occurred
+            });
+       } else if (!hasCameraPermission) {
+            toast({
+                title: 'Camera Permission Needed',
+                description: 'Enable camera permissions to retake photo.',
+                variant: 'destructive',
+            });
        }
   };
 
@@ -144,10 +188,13 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
 
              {/* Permission Denied Alert */}
              {hasCameraPermission === false && !isCameraInitializing && (
-               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4">
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
                  <AlertCircle className="h-10 w-10 text-destructive mb-2" />
-                 <p className="text-center text-sm text-destructive-foreground">
-                   Camera access denied. Please enable permissions in your browser settings.
+                 <p className="text-sm text-destructive-foreground">
+                   Camera access denied.
+                 </p>
+                 <p className="text-xs text-destructive-foreground/80 mt-1">
+                    Please enable permissions in your browser settings.
                  </p>
                </div>
              )}
@@ -162,20 +209,20 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
 
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center gap-2">
+      <div className="flex flex-wrap justify-between items-center gap-2">
         {!imagePreview ? (
           <Button onClick={captureImage} disabled={!hasCameraPermission || isCameraInitializing}>
             <Camera className="mr-2 h-4 w-4" />
-            Capture
+            Capture Image
           </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={resetAnalysis} disabled={isAnalyzing}>
+            <Button variant="outline" onClick={resetCapture} disabled={isAnalyzing}>
                 <RefreshCcw className="mr-2 h-4 w-4"/> Retake
             </Button>
             <Button onClick={handleAnalyzeImage} disabled={isAnalyzing || !!aiAnalysisResult}>
               {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanSearch className="mr-2 h-4 w-4" />}
-              {aiAnalysisResult ? 'Analyzed' : 'Analyze'}
+              {aiAnalysisResult ? 'Analyzed' : 'Analyze Image (Optional)'}
             </Button>
           </>
         )}
@@ -187,12 +234,21 @@ export default function AiAnalysisComponent({ onClose }: AiAnalysisComponentProp
                 <ScanSearch className="h-4 w-4" />
                 <AlertTitle>AI Analysis Result</AlertTitle>
                 <AlertDescription>
-                    <p><strong>Detected Type:</strong> {aiAnalysisResult.detectedType}</p>
+                    <p><strong>Suggested Type:</strong> {aiAnalysisResult.detectedType}</p>
                     <p><strong>Suggested Title:</strong> {aiAnalysisResult.suggestedTitle}</p>
                     <p><strong>Suggested Description:</strong> {aiAnalysisResult.suggestedDescription}</p>
+                    <p className="text-xs text-muted-foreground mt-1">You can edit these details on the next screen.</p>
                 </AlertDescription>
             </Alert>
         )}
+
+       {/* Proceed Button */}
+       {imagePreview && (
+          <Button onClick={handleUseImageAndData} className="w-full mt-4" disabled={isAnalyzing}>
+             Use This Image {aiAnalysisResult ? '& Analysis' : ''}
+             <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+       )}
     </div>
   );
 }
