@@ -1,53 +1,48 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image'; // Import next/image
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Issue, IssueStatus, IssueType } from '@/types/issue';
+import { allIssuesData, addIssueToDb, updateIssueStatusInDb, deleteIssueFromDb } from '@/lib/mock-db'; // Import from mock DB
 import { format } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle, AlertCircle, Image as ImageIcon } from 'lucide-react'; // Added ImageIcon
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
-// Mock data fetching function - Replace with actual Firebase query for ALL issues
+// Mock data fetching function - Reads from mock-db
 const mockFetchAllIssues = async (): Promise<Issue[]> => {
-  await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-   const allIssues: Issue[] = [
-    { id: 'issue1', title: 'Large Pothole on Main St', description: 'A large pothole near the intersection of Main St and 1st Ave is causing traffic issues.', type: 'Road', location: { latitude: 34.0522, longitude: -118.2437, address: 'Main St & 1st Ave' }, status: 'Pending', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 10).getTime() },
-    { id: 'issue2', title: 'Streetlight Out', description: 'The streetlight at Elm St park entrance is not working.', type: 'Streetlight', location: { latitude: 34.0550, longitude: -118.2450, address: 'Elm St Park' }, status: 'In Progress', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 15).getTime(), assignedTo: 'Dept. of Public Works' },
-    { id: 'issue3', title: 'Overflowing Bin', description: 'Public garbage bin at the bus stop on Oak Ave is overflowing.', type: 'Garbage', location: { latitude: 34.0500, longitude: -118.2400, address: 'Oak Ave Bus Stop' }, status: 'Resolved', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 1).getTime(), resolvedAt: new Date(2024, 5, 3).getTime() },
-    { id: 'issue4', title: 'Broken Park Bench', description: 'A bench in Central Park is broken and unsafe.', type: 'Park', location: { latitude: 34.0600, longitude: -118.2500, address: 'Central Park' }, status: 'Pending', reportedById: 'citizen456', reportedAt: new Date(2024, 5, 18).getTime() },
-    { id: 'issue5', title: 'Illegal Dumping', description: 'Someone dumped trash behind the old factory on Industrial Rd.', type: 'Other', location: { latitude: 34.0400, longitude: -118.2300, address: 'Industrial Rd' }, status: 'In Progress', reportedById: 'citizen789', reportedAt: new Date(2024, 5, 19).getTime(), assignedTo: 'Sanitation Dept.' },
-     { id: 'issue6', title: 'Damaged Road Sign', description: 'Stop sign at Corner St & Avenue B is bent.', type: 'Road', location: { latitude: 34.0700, longitude: -118.2600, address: 'Corner St & Avenue B' }, status: 'Pending', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 20).getTime() },
-  ];
-  return allIssues;
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay shorter
+  // Return a copy to avoid direct state mutation if the source array is used elsewhere
+  return [...allIssuesData];
 };
 
-// Mock function to update issue status - Replace with Firebase update
+// Mock function to update issue status - Uses mock-db
 const mockUpdateIssueStatus = async (issueId: string, newStatus: IssueStatus): Promise<void> => {
-  await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
-  console.log(`Updating issue ${issueId} status to ${newStatus}`);
-   // Simulate potential error
-  // if (Math.random() > 0.8) {
-  //   throw new Error("Failed to update issue status in the database.");
-  // }
+  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+  const success = updateIssueStatusInDb(issueId, newStatus);
+  if (!success) {
+      throw new Error("Issue not found.");
+  }
+  console.log(`Updated issue ${issueId} status to ${newStatus}`);
 };
 
-// Mock function to delete an issue - Replace with Firebase delete
+// Mock function to delete an issue - Uses mock-db
 const mockDeleteIssue = async (issueId: string): Promise<void> => {
-    await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network delay
-    console.log(`Deleting issue ${issueId}`);
-    // Simulate potential error
-    // if (Math.random() > 0.8) {
-    //   throw new Error("Failed to delete issue from the database.");
-    // }
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+    const success = deleteIssueFromDb(issueId);
+    if (!success) {
+        throw new Error("Issue not found.");
+    }
+    console.log(`Deleted issue ${issueId}`);
 };
 
 
@@ -55,7 +50,7 @@ const getStatusBadgeVariant = (status: IssueStatus): "default" | "secondary" | "
   switch (status) {
     case 'Pending': return 'secondary';
     case 'In Progress': return 'default';
-    case 'Resolved': return 'outline'; // Assuming outline uses accent color
+    case 'Resolved': return 'outline';
     default: return 'secondary';
   }
 };
@@ -73,14 +68,14 @@ const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Othe
 
 
 export default function AdminDashboardPage() {
-  const [allIssues, setAllIssues] = useState<Issue[]>([]);
+  const [issuesList, setIssuesList] = useState<Issue[]>([]); // Renamed from allIssues
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<IssueStatus | 'all'>('all');
   const [filterType, setFilterType] = useState<IssueType | 'all'>('all');
   const [loading, setLoading] = useState(true);
-  const [updatingIssueId, setUpdatingIssueId] = useState<string | null>(null); // Track which issue is being updated
-  const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null); // Track which issue is being deleted
+  const [updatingIssueId, setUpdatingIssueId] = useState<string | null>(null);
+  const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -90,9 +85,9 @@ export default function AdminDashboardPage() {
       setError(null);
       try {
         const fetchedIssues = await mockFetchAllIssues();
-        fetchedIssues.sort((a, b) => b.reportedAt - a.reportedAt); // Sort by date
-        setAllIssues(fetchedIssues);
-        setFilteredIssues(fetchedIssues); // Apply initial filters/search if any (currently none)
+        // No need to sort here if mock-db is already sorted or sorting happens in filtering
+        setIssuesList(fetchedIssues);
+        // setFilteredIssues(fetchedIssues); // Filtering will handle this in the next effect
       } catch (err) {
         console.error("Failed to fetch issues:", err);
         setError("Could not load issues. Please try again later.");
@@ -102,11 +97,11 @@ export default function AdminDashboardPage() {
       }
     };
     loadIssues();
-  }, [toast]); // Added toast to dependency array as it's used inside useEffect
+  }, [toast]);
 
    // Apply filters and search whenever dependencies change
    useEffect(() => {
-     let tempIssues = allIssues;
+     let tempIssues = [...issuesList]; // Work with a copy of the current issues list
 
      // Filter by status
      if (filterStatus !== 'all') {
@@ -118,7 +113,7 @@ export default function AdminDashboardPage() {
        tempIssues = tempIssues.filter(issue => issue.type === filterType);
      }
 
-     // Filter by search term (simple title/description search)
+     // Filter by search term
      if (searchTerm) {
        const lowerCaseSearchTerm = searchTerm.toLowerCase();
        tempIssues = tempIssues.filter(issue =>
@@ -129,15 +124,18 @@ export default function AdminDashboardPage() {
        );
      }
 
+     // Sort by date descending AFTER filtering
+     tempIssues.sort((a, b) => b.reportedAt - a.reportedAt);
+
      setFilteredIssues(tempIssues);
-   }, [searchTerm, filterStatus, filterType, allIssues]);
+   }, [searchTerm, filterStatus, filterType, issuesList]); // Depend on issuesList
 
   const handleStatusChange = async (issueId: string, newStatus: IssueStatus) => {
-    setUpdatingIssueId(issueId); // Indicate loading state for this specific row/action
+    setUpdatingIssueId(issueId);
     try {
       await mockUpdateIssueStatus(issueId, newStatus);
-      // Update local state Optimistically or Refetch
-      setAllIssues(prevIssues =>
+      // Update local state by mapping over the existing list
+      setIssuesList(prevIssues =>
         prevIssues.map(issue =>
           issue.id === issueId ? { ...issue, status: newStatus, resolvedAt: newStatus === 'Resolved' ? Date.now() : issue.resolvedAt } : issue
         )
@@ -147,7 +145,7 @@ export default function AdminDashboardPage() {
       console.error(`Failed to update status for issue ${issueId}:`, err);
       toast({ title: "Update Failed", description: err.message || `Could not update status for issue ${issueId}.`, variant: "destructive" });
     } finally {
-       setUpdatingIssueId(null); // Reset loading state
+       setUpdatingIssueId(null);
     }
   };
 
@@ -155,8 +153,8 @@ export default function AdminDashboardPage() {
        setDeletingIssueId(issueId);
        try {
            await mockDeleteIssue(issueId);
-           // Remove from local state
-           setAllIssues(prevIssues => prevIssues.filter(issue => issue.id !== issueId));
+           // Remove from local state by filtering the existing list
+           setIssuesList(prevIssues => prevIssues.filter(issue => issue.id !== issueId));
            toast({ title: "Issue Deleted", description: `Issue ${issueId} has been removed.` });
        } catch (err: any) {
            console.error(`Failed to delete issue ${issueId}:`, err);
@@ -164,6 +162,18 @@ export default function AdminDashboardPage() {
        } finally {
             setDeletingIssueId(null);
        }
+   };
+
+   // Function to get placeholder keywords based on issue type
+   const getImageHint = (type: IssueType): string => {
+     switch (type) {
+       case 'Road': return 'pothole road';
+       case 'Garbage': return 'trash bin';
+       case 'Streetlight': return 'street light';
+       case 'Park': return 'park bench';
+       case 'Other': return 'urban issue';
+       default: return 'issue';
+     }
    };
 
   return (
@@ -214,12 +224,28 @@ export default function AdminDashboardPage() {
 
       {loading && (
         <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            {[...Array(4)].map((_, i) => ( // Render 4 skeleton rows
+                <Card key={i} className="p-0">
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableBody>
+                                <TableRow>
+                                    <TableCell><Skeleton className="h-10 w-10 rounded-md" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
+                                    <TableCell><Skeleton className="h-6 w-[100px]" /></TableCell>
+                                    <TableCell className="text-right"><Skeleton className="h-8 w-[100px]" /></TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            ))}
         </div>
       )}
+
 
       {error && (
           <Alert variant="destructive">
@@ -235,6 +261,7 @@ export default function AdminDashboardPage() {
                 <Table>
                     <TableHeader>
                     <TableRow>
+                        <TableHead className="w-[70px]">Image</TableHead> {/* Added Image column */}
                         <TableHead>Title</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Location</TableHead>
@@ -246,13 +273,29 @@ export default function AdminDashboardPage() {
                     <TableBody>
                     {filteredIssues.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                            <TableCell colSpan={7} className="h-24 text-center text-muted-foreground"> {/* Increased colSpan */}
                                 No issues found matching your criteria.
                             </TableCell>
                         </TableRow>
                     ) : (
                         filteredIssues.map((issue) => (
                         <TableRow key={issue.id} className={`${updatingIssueId === issue.id || deletingIssueId === issue.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <TableCell>
+                                {issue.imageUrl ? (
+                                    <Image
+                                        src={issue.imageUrl}
+                                        alt={`Image for ${issue.title}`}
+                                        width={50}
+                                        height={50}
+                                        className="rounded-md object-cover"
+                                        data-ai-hint={getImageHint(issue.type)}
+                                    />
+                                ) : (
+                                    <div className="w-[50px] h-[50px] bg-muted rounded-md flex items-center justify-center text-muted-foreground">
+                                        <ImageIcon className="h-5 w-5"/>
+                                    </div>
+                                )}
+                            </TableCell>
                             <TableCell className="font-medium max-w-[250px] truncate" title={issue.title}>{issue.title}</TableCell>
                             <TableCell>
                                  <Badge variant="outline" className="flex items-center gap-1 w-fit">
@@ -333,10 +376,8 @@ export default function AdminDashboardPage() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
-                               {/* Add Edit button/modal later if needed */}
-                               {/* <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <Edit className="h-4 w-4" />
-                               </Button> */}
+                               {/* Edit button can be added later */}
+                               {/* <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button> */}
                             </TableCell>
                         </TableRow>
                         ))

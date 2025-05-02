@@ -1,40 +1,35 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image'; // Import next/image
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Issue, IssueStatus } from '@/types/issue';
+import { Issue, IssueStatus, IssueType } from '@/types/issue';
+import { allIssuesData } from '@/lib/mock-db'; // Import from mock DB
 import { format } from 'date-fns';
-import { MapPin, Tag, Calendar, Info, Filter, AlertCircle } from 'lucide-react'; // Import icons
+import { MapPin, Tag, Calendar, Info, Filter, AlertCircle, LoaderCircle, CheckCircle, Image as ImageIcon } from 'lucide-react'; // Import more icons
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 
-// Mock data fetching function - Replace with actual Firebase query
+// Mock data fetching function - Reads from mock-db
 const mockFetchIssues = async (userId: string): Promise<Issue[]> => {
-  await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-  // Simulate fetching issues for the logged-in citizen (userId 'citizen123')
-   const allIssues: Issue[] = [
-    { id: 'issue1', title: 'Large Pothole on Main St', description: 'A large pothole near the intersection of Main St and 1st Ave is causing traffic issues.', type: 'Road', location: { latitude: 34.0522, longitude: -118.2437, address: 'Main St & 1st Ave' }, status: 'Pending', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 10).getTime() },
-    { id: 'issue2', title: 'Streetlight Out', description: 'The streetlight at Elm St park entrance is not working.', type: 'Streetlight', location: { latitude: 34.0550, longitude: -118.2450, address: 'Elm St Park' }, status: 'In Progress', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 15).getTime(), assignedTo: 'Dept. of Public Works' },
-    { id: 'issue3', title: 'Overflowing Bin', description: 'Public garbage bin at the bus stop on Oak Ave is overflowing.', type: 'Garbage', location: { latitude: 34.0500, longitude: -118.2400, address: 'Oak Ave Bus Stop' }, status: 'Resolved', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 1).getTime(), resolvedAt: new Date(2024, 5, 3).getTime() },
-     { id: 'issue4', title: 'Broken Park Bench', description: 'A bench in Central Park is broken and unsafe.', type: 'Park', location: { latitude: 34.0600, longitude: -118.2500, address: 'Central Park' }, status: 'Pending', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 18).getTime() },
-      { id: 'issue5', title: 'Illegal Dumping', description: 'Someone dumped trash behind the old factory on Industrial Rd.', type: 'Other', location: { latitude: 34.0400, longitude: -118.2300, address: 'Industrial Rd' }, status: 'In Progress', reportedById: 'citizen123', reportedAt: new Date(2024, 5, 19).getTime(), assignedTo: 'Sanitation Dept.' },
-  ];
-  return allIssues.filter(issue => issue.reportedById === userId);
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay shorter
+  // Return a copy filtered by userId
+  return [...allIssuesData.filter(issue => issue.reportedById === userId)];
 };
 
 
 const getStatusBadgeVariant = (status: IssueStatus): "default" | "secondary" | "outline" | "destructive" | null | undefined => {
   switch (status) {
     case 'Pending':
-      return 'secondary'; // Use secondary (gray) for pending
+      return 'secondary';
     case 'In Progress':
-      return 'default'; // Use default (blue/primary) for in progress
+      return 'default';
     case 'Resolved':
-      return 'outline'; // Use outline (theme accent green) for resolved (or define a 'success' variant)
+      return 'outline';
     default:
       return 'secondary';
   }
@@ -45,9 +40,9 @@ const getStatusIcon = (status: IssueStatus): React.ReactNode => {
         case 'Pending':
             return <Info className="h-4 w-4 text-muted-foreground" />;
         case 'In Progress':
-            return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-loader-circle text-primary"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>; // Loader icon for In Progress
+            return <LoaderCircle className="h-4 w-4 text-primary animate-spin" />; // Use LoaderCircle
         case 'Resolved':
-             return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-check-circle text-accent"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>; // CheckCircle for Resolved (using accent color)
+             return <CheckCircle className="h-4 w-4 text-accent" />; // Use CheckCircle
         default:
             return <Info className="h-4 w-4 text-muted-foreground" />;
     }
@@ -69,10 +64,8 @@ export default function CitizenDashboardPage() {
       setError(null);
       try {
         const fetchedIssues = await mockFetchIssues(userId);
-        // Sort by reported date descending
-        fetchedIssues.sort((a, b) => b.reportedAt - a.reportedAt);
+        // No need to sort here if mock-db is already sorted or sorting happens in filtering
         setIssues(fetchedIssues);
-        setFilteredIssues(fetchedIssues); // Initially show all
       } catch (err) {
         console.error("Failed to fetch issues:", err);
         setError("Could not load your reported issues. Please try again later.");
@@ -83,14 +76,52 @@ export default function CitizenDashboardPage() {
     loadIssues();
   }, [userId]);
 
+  // This effect now listens to changes in the global `allIssuesData`
+  // and updates the local `issues` state if relevant changes occur.
+  // NOTE: This is a simplified polling mechanism for demonstration.
+  // In a real app with Firebase, you'd use Firestore's real-time listeners.
   useEffect(() => {
-    // Apply filter when filterStatus or issues change
-    if (filterStatus === 'all') {
-      setFilteredIssues(issues);
-    } else {
-      setFilteredIssues(issues.filter(issue => issue.status === filterStatus));
+      const interval = setInterval(() => {
+          const currentRelevantIssues = allIssuesData.filter(issue => issue.reportedById === userId);
+          // Simple comparison based on length and IDs for demo purposes
+          if (currentRelevantIssues.length !== issues.length ||
+              !currentRelevantIssues.every(issue => issues.find(i => i.id === issue.id))) {
+             // Sort before setting state to ensure consistent order
+             currentRelevantIssues.sort((a, b) => b.reportedAt - a.reportedAt);
+             setIssues(currentRelevantIssues);
+          }
+      }, 2000); // Check for changes every 2 seconds
+
+      return () => clearInterval(interval); // Cleanup interval on unmount
+  }, [userId, issues]); // Re-run if userId or the local issues array changes
+
+
+  useEffect(() => {
+    // Apply filter when filterStatus or the main issues list change
+    let tempIssues = [...issues]; // Work with a copy
+
+    if (filterStatus !== 'all') {
+      tempIssues = tempIssues.filter(issue => issue.status === filterStatus);
     }
-  }, [filterStatus, issues]);
+
+    // Sort by reported date descending AFTER filtering
+    tempIssues.sort((a, b) => b.reportedAt - a.reportedAt);
+
+    setFilteredIssues(tempIssues);
+  }, [filterStatus, issues]); // Depend on issues list
+
+   // Function to get placeholder keywords based on issue type
+   const getImageHint = (type: IssueType): string => {
+     switch (type) {
+       case 'Road': return 'pothole road';
+       case 'Garbage': return 'trash bin';
+       case 'Streetlight': return 'street light';
+       case 'Park': return 'park bench';
+       case 'Other': return 'urban issue';
+       default: return 'issue';
+     }
+   };
+
 
   return (
     <div>
@@ -121,8 +152,9 @@ export default function CitizenDashboardPage() {
                 <Skeleton className="h-4 w-1/2 mt-1" />
               </CardHeader>
               <CardContent>
+                 <Skeleton className="h-32 w-full mb-4" /> {/* Skeleton for image */}
                 <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-full mb-4" />
+                <Skeleton className="h-4 w-2/3 mb-4" />
                  <Skeleton className="h-4 w-1/3" />
                  <Skeleton className="h-4 w-1/4 mt-1" />
               </CardContent>
@@ -148,8 +180,9 @@ export default function CitizenDashboardPage() {
           <p className="text-muted-foreground">
             {filterStatus === 'all' ? "You haven't reported any issues yet." : `No issues found with status "${filterStatus}".`}
           </p>
-          {/* Optional: Add a button to report issue if list is empty */}
-           {/* <Button className="mt-4">Report New Issue</Button> */}
+           <Button asChild className="mt-4">
+             <a href="/citizen/dashboard/report">Report New Issue</a>
+           </Button>
         </div>
       )}
 
@@ -158,6 +191,22 @@ export default function CitizenDashboardPage() {
           {filteredIssues.map((issue) => (
             <Card key={issue.id} className="flex flex-col justify-between shadow-md hover:shadow-lg transition-shadow duration-200">
               <CardHeader>
+                 {issue.imageUrl && (
+                    <div className="relative w-full aspect-video mb-4 rounded-t-lg overflow-hidden">
+                        <Image
+                            src={issue.imageUrl}
+                            alt={`Image for ${issue.title}`}
+                            layout="fill"
+                            objectFit="cover"
+                            data-ai-hint={getImageHint(issue.type)}
+                        />
+                    </div>
+                 )}
+                 {!issue.imageUrl && (
+                    <div className="w-full aspect-video mb-4 rounded-t-lg bg-muted flex items-center justify-center text-muted-foreground">
+                        <ImageIcon className="h-12 w-12"/>
+                    </div>
+                 )}
                 <CardTitle className="text-lg">{issue.title}</CardTitle>
                 <CardDescription className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
                    <Tag className="h-3 w-3" /> {issue.type}
@@ -178,8 +227,6 @@ export default function CitizenDashboardPage() {
                       {getStatusIcon(issue.status)}
                       {issue.status}
                  </Badge>
-                 {/* Optional: Add a details button */}
-                 {/* <Button variant="link" size="sm" className="p-0 h-auto">Details</Button> */}
               </CardFooter>
             </Card>
           ))}

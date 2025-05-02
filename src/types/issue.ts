@@ -15,6 +15,7 @@ export interface Issue {
   status: IssueStatus;
   reportedById: string; // User ID of the citizen who reported
   reportedAt: number; // Timestamp (e.g., Date.now())
+  imageUrl?: string; // Optional URL for an image of the issue
   // Optional fields for admin
   assignedTo?: string;
   resolvedAt?: number;
