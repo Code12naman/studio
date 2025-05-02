@@ -16,20 +16,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation, Coordinate } from '@/services/geolocation';
-import { Issue, IssueType } from '@/types/issue';
-import { addIssueToDb } from '@/lib/mock-db';
-import { Camera, MapPin, Upload, LoaderCircle, AlertCircle, Sparkles, ImageUp } from 'lucide-react'; // Added ImageUp
+import { Issue, IssueType, IssuePriority } from '@/types/issue'; // Import IssuePriority
+import { addIssueToDb, calculateDueDate } from '@/lib/mock-db'; // Import calculateDueDate
+import { Camera, MapPin, Upload, LoaderCircle, AlertCircle, Sparkles, ImageUp, ShieldAlert } from 'lucide-react'; // Added ShieldAlert for priority
 import { analyzeIssueImage, AnalyzeIssueImageOutput } from '@/ai/flows/analyze-issue-image-flow'; // Import the AI flow
-import { useSearchParams, useRouter } from 'next/navigation'; // Import useSearchParams and useRouter
-
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Other"];
+const priorities: IssuePriority[] = ["Low", "Medium", "High"]; // Define priorities
 const AI_IMAGE_STORAGE_KEY = 'aiCapturedImage'; // Key for sessionStorage
 
 const formSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title must be 100 characters or less'),
   description: z.string().min(10, 'Description must be at least 10 characters').max(500, 'Description must be 500 characters or less'),
   type: z.enum(issueTypes, { required_error: "Please select an issue type." }),
+  priority: z.enum(priorities, { required_error: "Please select a priority level." }), // Add priority field
   location: z.object({
     latitude: z.number().refine(val => val !== 0, "Location must be acquired."), // Ensure location is set
     longitude: z.number().refine(val => val !== 0, "Location must be acquired."),
@@ -55,19 +56,19 @@ export default function ReportIssuePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isTakingPhoto, setIsTakingPhoto] = useState(false); // State to handle photo taking transition
+  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
   const searchParams = useSearchParams();
-  const router = useRouter(); // Add useRouter
+  const router = useRouter();
   const { toast } = useToast();
 
-  // Read query parameters for AI pre-fill (excluding image)
   const aiType = searchParams?.get('aiType') as IssueType | null;
   const aiTitle = searchParams?.get('aiTitle');
   const aiDescription = searchParams?.get('aiDescription');
-  // aiImage is no longer read from query params
+  // aiImage is retrieved from sessionStorage
+  // aiPriority could be added here if AI suggests it, but we'll keep it manual for now
 
 
   const form = useForm<FormData>({
@@ -76,12 +77,12 @@ export default function ReportIssuePage() {
       title: aiTitle || '',
       description: aiDescription || '',
       type: aiType || undefined,
-      location: { latitude: 0, longitude: 0 }, // Default, will be updated
-      imageDataUri: undefined, // Will be set from sessionStorage if available
+      priority: 'Medium', // Default priority to Medium
+      location: { latitude: 0, longitude: 0 },
+      imageDataUri: undefined,
     },
   });
 
- // Retrieve image from sessionStorage and pre-fill form/preview
  useEffect(() => {
     if (typeof window !== 'undefined') {
         try {
@@ -90,63 +91,50 @@ export default function ReportIssuePage() {
                 console.log("Retrieved image from sessionStorage");
                 setImagePreview(storedImage);
                 form.setValue('imageDataUri', storedImage);
-                // Optionally convert to File if needed, similar to handleTakePhoto
                 fetch(storedImage)
                   .then(res => res.blob())
                   .then(blob => {
                      const file = new File([blob], `ai-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
                      form.setValue('image', file);
                    });
-
-                // Clear the item from sessionStorage after retrieving it
                 sessionStorage.removeItem(AI_IMAGE_STORAGE_KEY);
                  console.log("Cleared image from sessionStorage");
-
-                // Optionally re-run AI analysis if needed (or trust the pre-filled data)
-                // handleAiAnalysis(storedImage);
             } else {
                 console.log("No image found in sessionStorage for key:", AI_IMAGE_STORAGE_KEY);
             }
         } catch (e) {
             console.error("Failed to retrieve or process image from sessionStorage:", e);
-            // Handle potential errors (e.g., storage full, SecurityError)
         }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [form.setValue]); // Depend on form.setValue to ensure it's available
+ }, [form.setValue]);
 
 
-    // Ref to store the stream to stop it later
     const mediaStreamRef = useRef<MediaStream | null>(null);
 
-   // Function to stop the camera stream
    const stopCamera = () => {
         if (mediaStreamRef.current) {
             mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null; // Clear the ref
+            mediaStreamRef.current = null;
             if (videoRef.current) {
-               videoRef.current.srcObject = null; // Ensure video element source is cleared
+               videoRef.current.srcObject = null;
             }
             console.log("Camera stopped.");
         }
-        setShowCamera(false); // Hide camera view
-        // Keep permission status, don't reset it here
-        // setHasCameraPermission(null);
+        setShowCamera(false);
     };
 
-  // Effect to handle stopping the camera when the component unmounts or showCamera becomes false
   useEffect(() => {
-    // Cleanup function: Stop camera when component unmounts
     return () => {
         stopCamera();
     };
-  }, []); // Empty dependency array means this runs only on mount and unmount
+  }, []);
 
 
   const handleGetLocation = async () => {
     setIsGettingLocation(true);
     setLocationError(null);
-    form.clearErrors("location.latitude"); // Clear potential previous errors
+    form.clearErrors("location.latitude");
     form.clearErrors("location.longitude");
     try {
       const coords = await getCurrentLocation();
@@ -157,7 +145,6 @@ export default function ReportIssuePage() {
     } catch (error: any) {
       setLocationError(error.message || 'Could not get location.');
       toast({ title: 'Location Error', description: error.message || 'Failed to get location.', variant: 'destructive' });
-      // Manually set errors if needed, although refine should handle it too
        form.setError('location.latitude', { type: 'manual', message: 'Failed to get location.' });
        form.setError('location.longitude', { type: 'manual', message: 'Failed to get location.' });
     } finally {
@@ -166,7 +153,6 @@ export default function ReportIssuePage() {
   };
 
 
-  // Request location on initial load
   useEffect(() => {
     handleGetLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,10 +166,10 @@ export default function ReportIssuePage() {
       reader.onloadend = () => {
         const base64String = reader.result as string;
         setImagePreview(base64String);
-        form.setValue('imageDataUri', base64String); // Set image data for submission and analysis
-        setAiAnalysisResult(null); // Reset previous AI analysis
-        setAnalysisError(null); // Clear previous analysis errors
-        handleAiAnalysis(base64String); // Trigger AI analysis on new image
+        form.setValue('imageDataUri', base64String);
+        setAiAnalysisResult(null);
+        setAnalysisError(null);
+        handleAiAnalysis(base64String);
       };
        reader.onerror = () => {
          toast({
@@ -194,7 +180,6 @@ export default function ReportIssuePage() {
        };
       reader.readAsDataURL(file);
     }
-     // Reset file input to allow selecting the same file again if needed
      if (fileInputRef.current) {
         fileInputRef.current.value = '';
      }
@@ -206,38 +191,35 @@ export default function ReportIssuePage() {
 
   const handleShowCamera = async () => {
       if (showCamera) {
-           stopCamera(); // Stop camera if already showing
+           stopCamera();
            return;
       }
       setCameraError(null);
-      // setHasCameraPermission(null); // Don't reset permission status on toggle
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
-          setShowCamera(true); // Show camera UI elements (including video tag)
-          // Only request permission if not already granted or denied definitively
+          setShowCamera(true);
           if (hasCameraPermission === null || hasCameraPermission === true) {
-             setIsGettingLocation(true); // Show loading indicator while camera starts
+             setIsGettingLocation(true);
              try {
-                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); // Prefer rear camera
-                 mediaStreamRef.current = stream; // Store the stream
+                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                 mediaStreamRef.current = stream;
                  setHasCameraPermission(true);
                  if (videoRef.current) {
                      videoRef.current.srcObject = stream;
                  }
              } catch (err) {
                  console.error('Error accessing camera:', err);
-                 setHasCameraPermission(false); // Set to false on error
+                 setHasCameraPermission(false);
                  setCameraError('Camera access denied or camera not found. Please enable permissions.');
                  toast({
                      variant: 'destructive',
                      title: 'Camera Error',
                      description: 'Could not access camera. Check permissions or try uploading.',
                  });
-                 setShowCamera(false); // Hide camera view again if permission fails
+                 setShowCamera(false);
              } finally {
-                 setIsGettingLocation(false); // Hide loading indicator
+                 setIsGettingLocation(false);
              }
           } else {
-             // If permission is already known to be false, show error immediately
              setCameraError('Camera access denied. Please enable permissions in browser settings.');
              setShowCamera(false);
           }
@@ -250,7 +232,7 @@ export default function ReportIssuePage() {
 
   const handleTakePhoto = () => {
     if (videoRef.current && canvasRef.current) {
-        setIsTakingPhoto(true); // Indicate photo is being processed
+        setIsTakingPhoto(true);
         const video = videoRef.current;
         const canvas = canvasRef.current;
         canvas.width = video.videoWidth;
@@ -258,22 +240,20 @@ export default function ReportIssuePage() {
         const context = canvas.getContext('2d');
         if (context) {
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Use JPEG with quality
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
             setImagePreview(imageDataUrl);
-            form.setValue('imageDataUri', imageDataUrl); // Set image data for submission
-             // Convert Data URL to File object
+            form.setValue('imageDataUri', imageDataUrl);
              fetch(imageDataUrl)
                .then(res => res.blob())
                .then(blob => {
                  const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
                  form.setValue('image', file);
                });
-            setAiAnalysisResult(null); // Reset previous AI analysis
+            setAiAnalysisResult(null);
             setAnalysisError(null);
-             handleAiAnalysis(imageDataUrl); // Trigger AI analysis
-             stopCamera(); // Stop the camera stream after taking photo
+             handleAiAnalysis(imageDataUrl);
+             stopCamera();
         }
-         // Short delay to allow UI update before setting isTakingPhoto back to false
          setTimeout(() => setIsTakingPhoto(false), 100);
     }
   };
@@ -286,16 +266,15 @@ export default function ReportIssuePage() {
 
     try {
       const result = await analyzeIssueImage({ imageDataUri });
-      // Validate detectedType against the allowed enum values
       if (!issueTypes.includes(result.detectedType)) {
         console.warn(`AI detected type "${result.detectedType}" which is not in the predefined list. Defaulting to "Other".`);
         result.detectedType = "Other";
       }
       setAiAnalysisResult(result);
-      // Optionally pre-fill form fields if not already filled or if user confirms
       if (!form.getValues('type')) form.setValue('type', result.detectedType);
       if (!form.getValues('title')) form.setValue('title', result.suggestedTitle);
       if (!form.getValues('description')) form.setValue('description', result.suggestedDescription);
+      // Keep priority manual for now
       toast({ title: 'AI Analysis Complete', description: `Suggested Type: ${result.detectedType}` });
     } catch (err) {
       console.error('AI analysis failed:', err);
@@ -310,16 +289,16 @@ export default function ReportIssuePage() {
 
     const onSubmit = async (data: FormData) => {
         setIsSubmitting(true);
-        // Location validation is now handled by Zod schema
 
-        // Mock user ID - replace with actual user ID from auth context/session
         const userId = 'citizen123';
-        const issueId = `issue${Date.now()}${Math.random().toString(16).slice(2)}`; // Simple unique ID generation
+        const issueId = `issue${Date.now()}${Math.random().toString(16).slice(2)}`;
+        const reportedAt = Date.now(); // Get current timestamp
+        const dueDate = calculateDueDate(reportedAt); // Calculate due date
 
         const submissionLocation = {
              latitude: data.location.latitude,
              longitude: data.location.longitude,
-             address: data.location.address, // Address might be added later via geocoding
+             address: data.location.address,
         };
 
         const newIssue: Issue = {
@@ -327,52 +306,47 @@ export default function ReportIssuePage() {
         title: data.title,
         description: data.description,
         type: data.type,
+        priority: data.priority, // Include priority
         location: submissionLocation,
         status: 'Pending',
         reportedById: userId,
-        reportedAt: Date.now(),
-        // Store image data URI directly if no file handling backend exists, otherwise store URL after upload
-        imageUrl: data.imageDataUri, // Using imageDataUri directly for mock scenario
+        reportedAt: reportedAt,
+        dueDate: dueDate, // Include due date
+        imageUrl: data.imageDataUri,
         };
 
 
         try {
-            // Simulate saving to DB
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
             addIssueToDb(newIssue);
 
-             // Reset form, image preview, AI analysis, location state
             form.reset({
                  title: '',
                  description: '',
-                 type: undefined, // Reset select
-                 location: { latitude: 0, longitude: 0 }, // Reset location fields
+                 type: undefined,
+                 priority: 'Medium', // Reset priority to default
+                 location: { latitude: 0, longitude: 0 },
                  imageDataUri: undefined,
                  image: undefined,
             });
             setImagePreview(null);
             setAiAnalysisResult(null);
-            setLocation(null); // Reset location state
+            setLocation(null);
             setLocationError(null);
             setAnalysisError(null);
-             // Clear any potential leftover image in session storage (belt and suspenders)
              try {
                  sessionStorage.removeItem(AI_IMAGE_STORAGE_KEY);
              } catch (e) {}
 
             toast({
                  title: 'Issue Reported Successfully!',
-                 description: `Your report "${newIssue.title}" has been submitted.`,
+                 description: `Your report "${newIssue.title}" has been submitted. Expected resolution by ${new Date(dueDate).toLocaleDateString()}.`,
             });
 
-            // Attempt to get location again for the next report
-             // Wait briefly before getting location again to avoid immediate permission prompts if needed
              setTimeout(() => {
                  handleGetLocation();
              }, 500);
 
-
-             // Optionally, redirect to the dashboard after successful submission
              router.push('/citizen/dashboard');
 
 
@@ -402,8 +376,8 @@ export default function ReportIssuePage() {
              {/* Image Upload/Camera Section */}
              <FormField
                 control={form.control}
-                name="imageDataUri" // Bind to imageDataUri to control preview
-                render={({ fieldState }) => ( // Use fieldState to access errors if needed
+                name="imageDataUri"
+                render={({ fieldState }) => (
                 <FormItem>
                 <FormLabel>Issue Image (Optional)</FormLabel>
                 <FormControl>
@@ -417,9 +391,8 @@ export default function ReportIssuePage() {
                                  width={400}
                                  height={300}
                                  className="rounded-md mx-auto mb-2 object-contain max-h-[300px]"
-                                 unoptimized // Add this if src is often a data URI
+                                 unoptimized
                             />
-                            {/* Overlay Buttons on hover */}
                             <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                                 <Button type="button" variant="secondary" size="sm" onClick={triggerFileUpload}>
                                     <Upload className="h-4 w-4 mr-1" /> Change
@@ -436,7 +409,7 @@ export default function ReportIssuePage() {
                                         form.setValue('image', undefined);
                                         form.setValue('imageDataUri', undefined);
                                         setAiAnalysisResult(null);
-                                        stopCamera(); // Ensure camera stops if it was open
+                                        stopCamera();
                                     }}
                                 >
                                     Remove
@@ -499,7 +472,7 @@ export default function ReportIssuePage() {
                     </Card>
                 </FormControl>
                 <FormDescription>Upload or take a photo of the issue.</FormDescription>
-                <FormMessage>{fieldState.error?.message}</FormMessage> {/* Show potential errors for imageDataUri */}
+                <FormMessage>{fieldState.error?.message}</FormMessage>
                 </FormItem>
                 )}
             />
@@ -556,6 +529,32 @@ export default function ReportIssuePage() {
               )}
             />
 
+            {/* Priority Selection */}
+            <FormField
+              control={form.control}
+              name="priority"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Priority *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select the priority level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {priorities.map(priority => (
+                        <SelectItem key={priority} value={priority}>{priority}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                   <FormDescription>How urgent is this issue? (Expected resolution: 7 days)</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+
             <FormField
               control={form.control}
               name="title"
@@ -587,8 +586,8 @@ export default function ReportIssuePage() {
              {/* Location Section */}
              <FormField
                 control={form.control}
-                name="location.latitude" // Bind one of the location fields to ensure validation message appears here
-                render={() => ( // No direct field rendering, just structure
+                name="location.latitude"
+                render={() => (
                  <FormItem>
                     <FormLabel>Location *</FormLabel>
                     <Card className="p-4 space-y-2 bg-secondary">
@@ -620,7 +619,6 @@ export default function ReportIssuePage() {
                      <FormDescription>
                          {location ? "Location acquired. You can refresh if needed." : "Click the button to get your current location."}
                     </FormDescription>
-                    {/* Centralized error message display */}
                      <FormMessage>{form.formState.errors.location?.latitude?.message || form.formState.errors.location?.longitude?.message || form.formState.errors.location?.message}</FormMessage>
                  </FormItem>
                  )}
@@ -637,12 +635,7 @@ export default function ReportIssuePage() {
           </form>
         </Form>
       </CardContent>
-       {/* Add a way to close the camera if open - Redundant if stopCamera called correctly */}
-        {/* {showCamera && (
-           <div className="p-4 border-t">
-               <Button type="button" variant="outline" size="sm" onClick={stopCamera}>Close Camera</Button>
-           </div>
-        )} */}
+
     </Card>
   );
 }
