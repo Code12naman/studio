@@ -19,10 +19,11 @@ export default function AdminDashboardLayout({
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-secondary">
+    <div className="flex flex-col min-h-screen bg-[url('https://picsum.photos/seed/adminbg/1920/1080')] bg-cover bg-center bg-fixed">
       {/* Pass necessary props to Navbar */}
       <Navbar navItems={adminNavItems} userType="Admin" />
-      <main className="flex-1 container mx-auto px-4 py-8">
+      {/* Added semi-transparent background, backdrop blur, padding, rounded corners, and shadow to main content area */}
+      <main className="flex-1 container mx-auto px-4 py-8 bg-background/90 backdrop-blur-sm my-6 rounded-lg shadow-xl">
         {children}
       </main>
     </div>
