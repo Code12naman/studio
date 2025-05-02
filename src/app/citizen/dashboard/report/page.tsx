@@ -68,8 +68,8 @@ export default function ReportIssuePage() {
   const aiType = searchParams?.get('aiType') as IssueType | null;
   const aiTitle = searchParams?.get('aiTitle');
   const aiDescription = searchParams?.get('aiDescription');
+  const aiPriority = searchParams?.get('aiPriority') as IssuePriority | null; // Retrieve priority
   // aiImage is retrieved from sessionStorage
-  // aiPriority could be added here if AI suggests it, but we'll keep it manual for now
 
 
   const form = useForm<FormData>({
@@ -78,7 +78,7 @@ export default function ReportIssuePage() {
       title: aiTitle || '',
       description: aiDescription || '',
       type: aiType || undefined,
-      priority: 'Medium', // Default priority to Medium
+      priority: aiPriority || 'Medium', // Use AI suggested priority or default
       location: { latitude: 0, longitude: 0 },
       imageDataUri: undefined,
     },
@@ -92,7 +92,15 @@ export default function ReportIssuePage() {
      }
    });
    return () => subscription.unsubscribe();
- }, [form.watch, form]);
+ }, [form.watch, form]); // Removed 'form' from dependencies as form.watch is stable
+
+ // Update currentPriority state when form default value changes (e.g., from AI suggestion)
+ useEffect(() => {
+    const initialPriority = form.getValues('priority');
+    if (initialPriority) {
+        setCurrentPriority(initialPriority);
+    }
+ }, [form.getValues('priority')]); // Rerun when default priority changes
 
 
  useEffect(() => {
@@ -119,7 +127,7 @@ export default function ReportIssuePage() {
         }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [form.setValue]);
+ }, [form.setValue]); // form.setValue is stable
 
 
     const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -137,10 +145,11 @@ export default function ReportIssuePage() {
     };
 
   useEffect(() => {
+    // Cleanup function to stop the camera stream when the component unmounts
     return () => {
         stopCamera();
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs only on unmount
 
 
   const handleGetLocation = async () => {
@@ -166,12 +175,12 @@ export default function ReportIssuePage() {
 
 
   useEffect(() => {
-    // Only get location if it's not already set from sessionStorage or previous action
+    // Only get location if it's not already set (latitude is 0 is the default)
     if (form.getValues('location.latitude') === 0) {
         handleGetLocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // form.getValues is stable, handleGetLocation causes infinite loop if included
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -184,6 +193,7 @@ export default function ReportIssuePage() {
         form.setValue('imageDataUri', base64String);
         setAiAnalysisResult(null);
         setAnalysisError(null);
+        // Trigger AI analysis after setting image
         handleAiAnalysis(base64String);
       };
        reader.onerror = () => {
@@ -195,6 +205,7 @@ export default function ReportIssuePage() {
        };
       reader.readAsDataURL(file);
     }
+     // Reset file input to allow selecting the same file again if needed
      if (fileInputRef.current) {
         fileInputRef.current.value = '';
      }
@@ -212,13 +223,15 @@ export default function ReportIssuePage() {
       setCameraError(null);
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
           setShowCamera(true);
+          // Check permission state or try to get stream directly
           if (hasCameraPermission === null || hasCameraPermission === true) {
-             // setIsGettingLocation(true); // Reusing state might be confusing, perhaps a dedicated camera loading state?
              try {
+                 // Request camera with environment facing mode preference
                  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                 mediaStreamRef.current = stream;
+                 mediaStreamRef.current = stream; // Store the active stream
                  setHasCameraPermission(true);
                  if (videoRef.current) {
+                     // Ensure the video element is playing the stream
                      videoRef.current.srcObject = stream;
                  }
              } catch (err) {
@@ -230,15 +243,15 @@ export default function ReportIssuePage() {
                      title: 'Camera Error',
                      description: 'Could not access camera. Check permissions or try uploading.',
                  });
-                 setShowCamera(false);
-             } finally {
-                 // setIsGettingLocation(false);
+                 setShowCamera(false); // Hide camera view on error
              }
           } else {
+             // Permission was explicitly denied before
              setCameraError('Camera access denied. Please enable permissions in browser settings.');
              setShowCamera(false);
           }
       } else {
+          // Browser doesn't support mediaDevices
           setCameraError('Camera not supported on this device or browser.');
           setShowCamera(false);
       }
@@ -246,53 +259,80 @@ export default function ReportIssuePage() {
 
 
   const handleTakePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-        setIsTakingPhoto(true);
+    if (videoRef.current && canvasRef.current && !isTakingPhoto) {
+        setIsTakingPhoto(true); // Indicate photo capture process started
         const video = videoRef.current;
         const canvas = canvasRef.current;
+        // Set canvas dimensions to video's intrinsic dimensions for best quality
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const context = canvas.getContext('2d');
         if (context) {
+            // Draw the current video frame onto the canvas
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Get the image data as a JPEG data URL with quality 0.9 (adjust as needed)
             const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-            setImagePreview(imageDataUrl);
-            form.setValue('imageDataUri', imageDataUrl);
+            setImagePreview(imageDataUrl); // Show preview
+            form.setValue('imageDataUri', imageDataUrl); // Store data URI in form
+
+            // Convert data URL to Blob and then to File for form submission if needed
              fetch(imageDataUrl)
                .then(res => res.blob())
                .then(blob => {
                  const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-                 form.setValue('image', file);
+                 form.setValue('image', file); // Store file object if backend expects it
                });
-            setAiAnalysisResult(null);
+
+            setAiAnalysisResult(null); // Reset previous AI analysis
             setAnalysisError(null);
-             handleAiAnalysis(imageDataUrl);
-             stopCamera();
+            handleAiAnalysis(imageDataUrl); // Trigger AI analysis with the new image
+            stopCamera(); // Stop the camera stream after taking the photo
         } else {
             toast({ variant: 'destructive', title: 'Capture Failed', description: 'Could not process image from camera.' });
         }
+         // Briefly delay setting isTakingPhoto back to false to allow UI updates
          setTimeout(() => setIsTakingPhoto(false), 100);
     }
   };
 
 
+  // Function to trigger AI analysis
   const handleAiAnalysis = async (imageDataUri: string) => {
+    if (!imageDataUri) return;
+
     setIsAnalyzing(true);
     setAnalysisError(null);
-    setAiAnalysisResult(null);
+    setAiAnalysisResult(null); // Reset previous results
+
+    // Get current description from the form to provide context
+    const currentDescription = form.getValues('description');
 
     try {
-      const result = await analyzeIssueImage({ imageDataUri });
+      // Call the AI flow with image data and optional description
+      const result = await analyzeIssueImage({ imageDataUri, description: currentDescription });
+
+      // Validate and potentially correct the detected type
       if (!issueTypes.includes(result.detectedType)) {
         console.warn(`AI detected type "${result.detectedType}" which is not in the predefined list. Defaulting to "Other".`);
         result.detectedType = "Other";
       }
+      // Validate suggested priority
+       if (!priorities.includes(result.suggestedPriority)) {
+           console.warn(`AI suggested priority "${result.suggestedPriority}" is invalid. Defaulting to Medium.`);
+           result.suggestedPriority = "Medium";
+       }
+
       setAiAnalysisResult(result);
+
+      // Update form fields only if they are currently empty or using defaults
       if (!form.getValues('type')) form.setValue('type', result.detectedType);
       if (!form.getValues('title')) form.setValue('title', result.suggestedTitle);
       if (!form.getValues('description')) form.setValue('description', result.suggestedDescription);
-      // Keep priority manual for now
-      toast({ title: 'AI Analysis Complete', description: `Suggested Type: ${result.detectedType}` });
+      // Always update priority based on AI suggestion, allowing user override later
+      form.setValue('priority', result.suggestedPriority);
+      setCurrentPriority(result.suggestedPriority); // Update the local state for description display
+
+      toast({ title: 'AI Analysis Complete', description: `Suggested Type: ${result.detectedType}, Priority: ${result.suggestedPriority}` });
     } catch (err) {
       console.error('AI analysis failed:', err);
        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during analysis.';
@@ -307,64 +347,87 @@ export default function ReportIssuePage() {
     const onSubmit = async (data: FormData) => {
         setIsSubmitting(true);
 
+        // Use a mock user ID for now
         const userId = 'citizen123';
+        // Generate a unique issue ID
         const issueId = `issue${Date.now()}${Math.random().toString(16).slice(2)}`;
         const reportedAt = Date.now(); // Get current timestamp
         const dueDate = calculateDueDate(reportedAt, data.priority); // Calculate due date using priority
 
+        // Ensure location data is valid before creating the issue object
         const submissionLocation = {
              latitude: data.location.latitude,
              longitude: data.location.longitude,
-             address: data.location.address,
+             address: data.location.address, // Address might be undefined, that's okay
         };
+         // Basic check to ensure location was acquired
+        if (submissionLocation.latitude === 0 && submissionLocation.longitude === 0) {
+            toast({
+                title: 'Submission Failed',
+                description: 'Location could not be acquired. Please try getting location again.',
+                variant: 'destructive',
+            });
+            setIsSubmitting(false);
+            return; // Prevent submission without location
+        }
+
 
         const newIssue: Issue = {
             id: issueId,
             title: data.title,
             description: data.description,
             type: data.type,
-            priority: data.priority, // Include priority
+            priority: data.priority, // Include priority from form
             location: submissionLocation,
             status: 'Pending',
             reportedById: userId,
             reportedAt: reportedAt,
-            dueDate: dueDate, // Include due date
-            imageUrl: data.imageDataUri, // Use the data URI from the form state
+            dueDate: dueDate, // Include calculated due date
+            // Use the imageDataUri stored in the form state. Ensure it's cleared if image is removed.
+            imageUrl: data.imageDataUri,
         };
 
 
         try {
+            // Simulate network delay for submission
             await new Promise(resolve => setTimeout(resolve, 1000));
+            // Add the new issue to the mock database
             addIssueToDb(newIssue);
 
-            // Clear form and state after successful submission
+            // Reset form fields to their default values after successful submission
             form.reset({
                  title: '',
                  description: '',
                  type: undefined,
                  priority: 'Medium', // Reset priority to default
-                 location: { latitude: 0, longitude: 0 },
+                 location: { latitude: 0, longitude: 0, address: undefined },
                  imageDataUri: undefined,
                  image: undefined,
             });
+            // Clear UI state
             setImagePreview(null);
             setAiAnalysisResult(null);
             setLocation(null);
             setLocationError(null);
             setAnalysisError(null);
+            setCurrentPriority('Medium'); // Reset priority display state
+
+             // Attempt to clear the image from sessionStorage
              try {
-                 sessionStorage.removeItem(AI_IMAGE_STORAGE_KEY); // Clear session storage image
+                 sessionStorage.removeItem(AI_IMAGE_STORAGE_KEY);
                  console.log("Cleared image from sessionStorage after submission.");
              } catch (e) {
                 console.error("Could not remove image from sessionStorage:", e);
              }
 
+             // Format the due date for the success toast
              let dueDateString = 'N/A';
              if (dueDate) {
                 try {
                     dueDateString = new Date(dueDate).toLocaleDateString();
                 } catch (e) {
                     console.error("Error formatting due date", e);
+                    // Keep dueDateString as 'N/A' if formatting fails
                 }
              }
 
@@ -375,12 +438,8 @@ export default function ReportIssuePage() {
                  duration: 5000, // Show for 5 seconds
             });
 
-             // Optionally delay location refresh slightly
-             // setTimeout(() => {
-             //     handleGetLocation();
-             // }, 500);
-
-             router.push('/citizen/dashboard'); // Redirect to dashboard
+             // Redirect to the citizen dashboard after successful submission
+             router.push('/citizen/dashboard');
 
 
         } catch (error) {
@@ -391,17 +450,17 @@ export default function ReportIssuePage() {
                  variant: 'destructive',
              });
         } finally {
-            setIsSubmitting(false);
+            setIsSubmitting(false); // Reset submitting state
         }
     };
 
-    // Helper to get priority description
+    // Helper to get priority description based on the current selection
      const getPriorityDescription = (priority: IssuePriority): string => {
        switch (priority) {
-         case 'High': return 'High: Critical issue, expected resolution within 3 days.';
-         case 'Medium': return 'Medium: Standard issue, expected resolution within 5 days.';
-         case 'Low': return 'Low: Minor issue, expected resolution within 7 days.';
-         default: return 'Select priority.';
+         case 'High': return 'High: Critical issue affecting safety or essential services. Expected resolution within 3 days.';
+         case 'Medium': return 'Medium: Standard issue causing inconvenience. Expected resolution within 5 days.';
+         case 'Low': return 'Low: Minor issue or cosmetic problem. Expected resolution within 7 days.';
+         default: return 'Select the urgency of this issue.';
        }
      };
 
@@ -422,7 +481,7 @@ export default function ReportIssuePage() {
                 name="imageDataUri" // Bind to imageDataUri to manage the preview/source
                 render={({ fieldState }) => (
                 <FormItem>
-                <FormLabel>Issue Image (Optional)</FormLabel>
+                <FormLabel>Issue Image (Optional, Recommended for AI)</FormLabel>
                 <FormControl>
                     <Card className="border-dashed border-2 hover:border-primary transition-colors bg-secondary/30">
                     <CardContent className="p-4 text-center">
@@ -434,13 +493,14 @@ export default function ReportIssuePage() {
                                  width={400}
                                  height={300}
                                  className="rounded-md mx-auto object-contain max-h-[300px] border shadow-sm"
-                                 unoptimized
+                                 unoptimized // Important for data URIs
                             />
+                             {/* Overlay buttons for changing/removing image */}
                              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
-                                <Button type="button" variant="secondary" size="sm" onClick={triggerFileUpload} title="Upload a different image">
+                                <Button type="button" variant="secondary" size="sm" onClick={triggerFileUpload} title="Upload a different image" disabled={isAnalyzing || isTakingPhoto}>
                                     <Upload className="h-4 w-4 mr-1" /> Change
                                 </Button>
-                                <Button type="button" variant="secondary" size="sm" onClick={handleShowCamera} title="Take a new photo">
+                                <Button type="button" variant="secondary" size="sm" onClick={handleShowCamera} title="Take a new photo" disabled={isAnalyzing || isTakingPhoto}>
                                     <Camera className="h-4 w-4 mr-1" /> Retake
                                 </Button>
                                 <Button
@@ -449,12 +509,13 @@ export default function ReportIssuePage() {
                                     size="sm"
                                     onClick={() => {
                                         setImagePreview(null);
-                                        form.setValue('image', undefined); // Clear the file input if needed
-                                        form.setValue('imageDataUri', undefined); // Clear the data URI
+                                        form.setValue('image', undefined);
+                                        form.setValue('imageDataUri', undefined);
                                         setAiAnalysisResult(null);
-                                        stopCamera(); // Ensure camera is stopped
+                                        stopCamera(); // Ensure camera is stopped if it was open
                                     }}
                                     title="Remove image"
+                                    disabled={isAnalyzing || isTakingPhoto}
                                 >
                                     Remove
                                 </Button>
@@ -462,18 +523,21 @@ export default function ReportIssuePage() {
                         </div>
                         ) : (
                         <>
+                            {/* Camera View */}
                             {showCamera && hasCameraPermission && !isTakingPhoto && (
                                 <>
+                                    {/* Always render video tag but conditionally display */}
                                     <video ref={videoRef} className="w-full aspect-video rounded-md bg-black mb-2 shadow-inner" autoPlay muted playsInline />
                                     <div className="flex flex-wrap justify-center gap-2">
-                                        <Button type="button" onClick={handleTakePhoto} className="mb-2" disabled={isTakingPhoto}>
+                                        <Button type="button" onClick={handleTakePhoto} className="mb-2" disabled={isTakingPhoto || isAnalyzing}>
                                              {isTakingPhoto ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin"/> : <Camera className="mr-2 h-4 w-4" />}
                                              {isTakingPhoto ? 'Capturing...' : 'Take Photo'}
                                          </Button>
-                                         <Button type="button" variant="outline" size="sm" onClick={stopCamera} disabled={isTakingPhoto}>Cancel Camera</Button>
+                                         <Button type="button" variant="outline" size="sm" onClick={stopCamera} disabled={isTakingPhoto || isAnalyzing}>Cancel Camera</Button>
                                      </div>
                                 </>
                             )}
+                            {/* Camera Permission Denied or Error State */}
                             {showCamera && (hasCameraPermission === false || cameraError) && (
                                  <Alert variant="destructive" className="mb-2 text-left">
                                      <AlertCircle className="h-4 w-4" />
@@ -482,6 +546,7 @@ export default function ReportIssuePage() {
                                      <Button type="button" variant="outline" size="sm" onClick={stopCamera} className="mt-2">Close Camera</Button>
                                  </Alert>
                              )}
+                            {/* Taking Photo Loader */}
                             {showCamera && isTakingPhoto && (
                                 <div className="flex items-center justify-center w-full aspect-video rounded-md bg-muted mb-2">
                                     <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -489,15 +554,16 @@ export default function ReportIssuePage() {
                                 </div>
                             )}
 
-                            {!showCamera && (
+                            {/* Initial Prompt: Upload or Use Camera */}
+                            {!showCamera && !imagePreview && (
                                 <div className="flex flex-col items-center space-y-3 text-muted-foreground py-6">
                                     <ImageUp className="h-10 w-10" />
-                                    <p className="text-sm">Drag & drop an image, or</p>
+                                    <p className="text-sm">Add an image for AI analysis (optional)</p>
                                     <div className="flex gap-2">
-                                        <Button type="button" size="sm" variant="outline" onClick={triggerFileUpload}>
+                                        <Button type="button" size="sm" variant="outline" onClick={triggerFileUpload} disabled={isAnalyzing}>
                                             <Upload className="mr-2 h-4 w-4" /> Upload File
                                         </Button>
-                                        <Button type="button" size="sm" variant="outline" onClick={handleShowCamera}>
+                                        <Button type="button" size="sm" variant="outline" onClick={handleShowCamera} disabled={isAnalyzing}>
                                             <Camera className="mr-2 h-4 w-4" /> Use Camera
                                         </Button>
                                     </div>
@@ -516,7 +582,7 @@ export default function ReportIssuePage() {
                     </CardContent>
                     </Card>
                 </FormControl>
-                <FormDescription>Upload or take a photo of the issue.</FormDescription>
+                <FormDescription>Provide a clear image of the issue for better analysis and priority suggestion.</FormDescription>
                 <FormMessage>{fieldState.error?.message}</FormMessage>
                 </FormItem>
                 )}
@@ -524,16 +590,19 @@ export default function ReportIssuePage() {
 
 
             {/* AI Analysis Trigger/Display */}
+            {/* Show Analyze button only if image exists and no analysis is running/failed */}
             {imagePreview && !aiAnalysisResult && !isAnalyzing && !analysisError && (
                 <Button type="button" variant="outline" size="sm" onClick={() => form.getValues('imageDataUri') && handleAiAnalysis(form.getValues('imageDataUri')!)} className="flex items-center gap-1" disabled={!form.getValues('imageDataUri')}>
                      <Sparkles className="h-4 w-4 text-primary"/> Analyze with AI
                  </Button>
              )}
+             {/* Show Analyzing indicator */}
              {isAnalyzing && (
                  <div className="flex items-center text-muted-foreground text-sm p-2 bg-secondary rounded-md">
                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Analyzing image...
                  </div>
               )}
+              {/* Show Analysis Error */}
               {analysisError && (
                   <Alert variant="destructive" className="text-sm">
                        <AlertCircle className="h-4 w-4" />
@@ -541,23 +610,25 @@ export default function ReportIssuePage() {
                       <AlertDescription>{analysisError}</AlertDescription>
                   </Alert>
               )}
+              {/* Show AI Analysis Result */}
               {aiAnalysisResult && (
                   <Alert variant="default" className="text-sm bg-accent/10 border-accent/30">
                       <Sparkles className="h-4 w-4 text-accent" />
-                      <AlertTitle>AI Analysis Suggestion</AlertTitle>
+                      <AlertTitle>AI Analysis Suggestions</AlertTitle>
                        <AlertDescription>
-                           Type: {aiAnalysisResult.detectedType}, Title: "{aiAnalysisResult.suggestedTitle}". Fields have been pre-filled (if empty). You can edit them.
+                           Type: {aiAnalysisResult.detectedType}, Priority: {aiAnalysisResult.suggestedPriority}, Title: "{aiAnalysisResult.suggestedTitle}". Fields updated. Feel free to edit.
                       </AlertDescription>
                   </Alert>
                )}
 
+            {/* Issue Type Selection */}
             <FormField
               control={form.control}
               name="type"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Issue Type *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || ''} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select the type of issue" />
@@ -581,7 +652,7 @@ export default function ReportIssuePage() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Priority *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || ''} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select the priority level" />
@@ -598,13 +669,14 @@ export default function ReportIssuePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                   {/* Show dynamic description based on selected priority */}
                    <FormDescription>{getPriorityDescription(currentPriority)}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-
+            {/* Title Input */}
             <FormField
               control={form.control}
               name="title"
@@ -619,6 +691,7 @@ export default function ReportIssuePage() {
               )}
             />
 
+            {/* Description Input */}
             <FormField
               control={form.control}
               name="description"
@@ -626,7 +699,18 @@ export default function ReportIssuePage() {
                 <FormItem>
                   <FormLabel>Description *</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Provide details about the issue..." {...field} rows={4} />
+                    <Textarea
+                        placeholder="Provide details about the issue. This helps AI suggest priority."
+                        {...field}
+                        rows={4}
+                        // Trigger re-analysis if description changes significantly after image analysis
+                        onBlur={() => {
+                            if (imagePreview && !isAnalyzing) {
+                                // Consider adding a length check or debounce if needed
+                                handleAiAnalysis(form.getValues('imageDataUri')!);
+                            }
+                        }}
+                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -636,8 +720,8 @@ export default function ReportIssuePage() {
              {/* Location Section */}
              <FormField
                 control={form.control}
-                // Use a nested field name that doesn't conflict with the validation structure
-                name="location.latitude" // Keep binding to latitude for validation trigger
+                // Use a field from the location object to trigger validation correctly
+                name="location.latitude"
                 render={() => (
                  <FormItem>
                     <FormLabel>Location *</FormLabel>
@@ -656,21 +740,23 @@ export default function ReportIssuePage() {
                             </div>
                         </Alert>
                     )}
+                        {/* Display acquired location */}
                         {location && !isGettingLocation && (
                         <div className="flex items-center text-sm text-foreground bg-background/50 p-2 rounded-md border border-border">
                             <MapPin className="mr-2 h-4 w-4 text-primary shrink-0" />
                             <span className="truncate">Lat: {location.latitude.toFixed(5)}, Lon: {location.longitude.toFixed(5)}</span>
                         </div>
                     )}
+                        {/* Button to get/refresh location */}
                         <Button type="button" variant="outline" size="sm" onClick={handleGetLocation} disabled={isGettingLocation}>
                         {isGettingLocation ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
                         {location ? 'Refresh Location' : 'Get Current Location'}
                         </Button>
                     </Card>
                      <FormDescription>
-                         {location ? "Location acquired. You can refresh if needed." : "Click the button to get your current location."}
+                         {location ? "Location acquired. You can refresh if needed." : "Click the button to automatically get your current location."}
                     </FormDescription>
-                    {/* Display combined location errors */}
+                    {/* Display validation errors related to location */}
                     {(form.formState.errors.location?.latitude || form.formState.errors.location?.longitude) && (
                          <p className="text-sm font-medium text-destructive">{form.formState.errors.location?.latitude?.message || form.formState.errors.location?.longitude?.message || "Location is required."}</p>
                      )}
@@ -679,7 +765,8 @@ export default function ReportIssuePage() {
             />
 
 
-            <Button type="submit" className="w-full text-base py-3" size="lg" disabled={isSubmitting || isGettingLocation}>
+            {/* Submit Button */}
+            <Button type="submit" className="w-full text-base py-3" size="lg" disabled={isSubmitting || isGettingLocation || isAnalyzing || isTakingPhoto}>
               {isSubmitting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
               {isSubmitting ? 'Submitting...' : 'Submit Report'}
             </Button>
@@ -693,3 +780,4 @@ export default function ReportIssuePage() {
     </Card>
   );
 }
+

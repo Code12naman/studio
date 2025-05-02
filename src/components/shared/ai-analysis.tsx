@@ -9,16 +9,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { analyzeIssueImage, AnalyzeIssueImageOutput } from '@/ai/flows/analyze-issue-image-flow'; // Ensure correct import
 import { useToast } from "@/hooks/use-toast";
-import { Camera, LoaderCircle, AlertCircle, X, Send, ImageUp, RotateCcw } from 'lucide-react';
-import { IssueType } from '@/types/issue'; // Import IssueType
+import { Camera, LoaderCircle, AlertCircle, X, Send, ImageUp, RotateCcw, Sparkles } from 'lucide-react'; // Added Sparkles
+import { IssueType, IssuePriority } from '@/types/issue'; // Import IssueType and Priority
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { cn } from '@/lib/utils'; // Import cn utility
+import { Textarea } from '@/components/ui/textarea'; // Import Textarea
+import { Label } from '@/components/ui/label'; // Import Label
 
 interface AiAnalysisComponentProps {
   onClose: () => void; // Callback to close the dialog
 }
 
 const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Other"];
+const issuePriorities: IssuePriority[] = ["Low", "Medium", "High"]; // For validation
 
 const AI_IMAGE_STORAGE_KEY = 'aiCapturedImage'; // Key for sessionStorage
 
@@ -29,6 +32,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
   const [isLoading, setIsLoading] = useState(false); // Separate state for analysis loading
   const [isCapturing, setIsCapturing] = useState(false); // Separate state for image capture/processing
   const [error, setError] = useState<string | null>(null);
+  const [description, setDescription] = useState(''); // State for optional description
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +53,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
      // Optionally hide camera view or update state if needed
   };
 
-  // Get camera permission
+  // Get camera permission on mount
   useEffect(() => {
     const getCameraPermission = async () => {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
@@ -83,7 +87,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
     return () => {
       stopCamera();
     };
-  }, [toast]);
+  }, [toast]); // Add toast as dependency
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current && !isCapturing) {
@@ -112,6 +116,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
             handleAnalysis(imageDataUrl); // Trigger analysis immediately
         } else {
              setError("Could not get canvas context to capture image.");
+             toast({ variant: 'destructive', title: 'Capture Failed', description: 'Could not process image.' });
         }
         setIsCapturing(false); // Indicate capture/processing finished
     }
@@ -158,6 +163,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
     fileInputRef.current?.click();
   };
 
+  // Handle AI Analysis
   const handleAnalysis = async (imageDataUri: string) => {
     if (!imageDataUri) {
       setError('No image available for analysis.');
@@ -168,15 +174,23 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
     setAnalysisResult(null);
 
     try {
-      const result = await analyzeIssueImage({ imageDataUri });
+      // Pass both image data URI and the current description state
+      const result = await analyzeIssueImage({ imageDataUri, description });
+
+      // Validate received data
       if (!issueTypes.includes(result.detectedType)) {
-           console.warn(`AI detected type "${result.detectedType}" which is not in the predefined list. Defaulting to "Other".`);
+           console.warn(`AI detected type "${result.detectedType}" is invalid. Defaulting to "Other".`);
            result.detectedType = "Other";
       }
-      setAnalysisResult(result);
+       if (!issuePriorities.includes(result.suggestedPriority)) {
+           console.warn(`AI suggested priority "${result.suggestedPriority}" is invalid. Defaulting to Medium.`);
+           result.suggestedPriority = "Medium";
+       }
+
+      setAnalysisResult(result); // Store the full result including priority
       toast({
         title: 'Analysis Complete',
-        description: `Detected issue type: ${result.detectedType}`,
+        description: `Detected: ${result.detectedType}, Priority: ${result.suggestedPriority}`,
       });
     } catch (err) {
       console.error('AI analysis failed:', err);
@@ -192,6 +206,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
     }
   };
 
+   // Navigate to report page with AI results
    const handleUseDetails = () => {
         if (!analysisResult || !capturedImage) return;
 
@@ -210,12 +225,13 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
             return; // Stop navigation if storage fails
         }
 
-        // Construct the query parameters *without* the large image data
+        // Construct the query parameters including the suggested priority
         const query = new URLSearchParams({
             aiType: analysisResult.detectedType,
             aiTitle: analysisResult.suggestedTitle,
             aiDescription: analysisResult.suggestedDescription,
-            // DO NOT include aiImage: capturedImage,
+            aiPriority: analysisResult.suggestedPriority, // Add priority to query params
+            // DO NOT include aiImage: capturedImage (it's in sessionStorage)
         });
 
         // Navigate to the report page with the query parameters
@@ -225,12 +241,14 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         onClose(); // Close the dialog after navigation
     };
 
+  // Reset state to start over
   const resetState = async () => {
       setCapturedImage(null);
       setAnalysisResult(null);
       setError(null);
       setIsLoading(false);
       setIsCapturing(false);
+      setDescription(''); // Reset description as well
 
       // Clear stored image from session storage if it exists
        try {
@@ -274,7 +292,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         style={{ display: 'none' }}
       />
 
-      {error && (
+      {error && !isLoading && !isCapturing && ( // Show error only when not loading/capturing
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -325,7 +343,8 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         // Analysis View
         <Card>
           <CardContent className="p-4 space-y-4">
-            <div className="relative w-full max-h-[40vh] rounded-md overflow-hidden flex justify-center items-center bg-muted">
+            {/* Image Preview */}
+            <div className="relative w-full max-h-[40vh] rounded-md overflow-hidden flex justify-center items-center bg-muted border">
                  <Image
                    src={capturedImage}
                    alt="Captured issue"
@@ -336,7 +355,31 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
                  />
             </div>
 
+             {/* Optional Description Input */}
+            <div className="space-y-2">
+                <Label htmlFor="ai-description">Add Description (Optional, helps AI assess priority)</Label>
+                <Textarea
+                    id="ai-description"
+                    placeholder="e.g., Pothole is deep and cars are swerving."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    disabled={isLoading} // Disable while analyzing
+                />
+                {/* Button to re-trigger analysis with updated description */}
+                <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleAnalysis(capturedImage)}
+                    disabled={isLoading || !capturedImage}
+                    className="flex items-center gap-1"
+                >
+                     <Sparkles className="h-4 w-4 text-primary"/> Re-Analyze with Description
+                 </Button>
+            </div>
 
+
+            {/* Loading Indicator */}
             {isLoading && (
               <div className="flex items-center justify-center space-x-2 text-muted-foreground pt-4">
                 <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -344,12 +387,15 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
               </div>
             )}
 
+            {/* Analysis Results */}
             {analysisResult && !isLoading && (
               <div className="space-y-3 text-sm border-t pt-4 mt-4">
                  <h3 className="font-semibold text-base text-foreground">AI Analysis Results:</h3>
                  <p><strong>Detected Type:</strong> {analysisResult.detectedType}</p>
+                 <p><strong>Suggested Priority:</strong> {analysisResult.suggestedPriority}</p>
                  <p><strong>Suggested Title:</strong> {analysisResult.suggestedTitle}</p>
                  <p><strong>Suggested Description:</strong> {analysisResult.suggestedDescription}</p>
+                  {/* Button to Proceed */}
                   <Button onClick={handleUseDetails} className="w-full mt-2">
                      <Send className="mr-2 h-4 w-4" /> Use Details & Report Issue
                   </Button>
@@ -366,22 +412,25 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
             )}
 
 
+            {/* Action Buttons */}
             <div className="flex justify-center gap-4 pt-4 border-t mt-4">
+              {/* Start Over Button */}
               <Button variant="outline" onClick={resetState} disabled={isLoading || isCapturing}>
                  <RotateCcw className="mr-2 h-4 w-4" /> Start Over
               </Button>
-               {/* Re-analyze button (useful if analysis failed) */}
-               {!isLoading && capturedImage && (error || !analysisResult) && (
+               {/* Re-analyze button (only shown if analysis failed or no result yet) */}
+               {/* {!isLoading && capturedImage && (error || !analysisResult) && (
                  <Button onClick={() => handleAnalysis(capturedImage)} disabled={isLoading || isCapturing}>
                      {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
                      {isLoading ? 'Analyzing...' : 'Re-Analyze'}
                  </Button>
-               )}
+               )} */}
             </div>
           </CardContent>
         </Card>
       )}
 
+      {/* Close Button */}
       <div className="flex justify-end mt-4">
         <Button variant="ghost" onClick={() => { stopCamera(); onClose(); }}>
           <X className="mr-2 h-4 w-4" /> Close
@@ -392,3 +441,4 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
 };
 
 export default AiAnalysisComponent;
+
