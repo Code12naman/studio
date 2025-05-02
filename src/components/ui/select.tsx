@@ -26,7 +26,7 @@ const SelectTrigger = React.forwardRef<
     {...props}
   >
     {children}
-    {/* Removed asChild prop */}
+    {/* Ensure SelectPrimitive.Icon does NOT have asChild */}
     <SelectPrimitive.Icon>
       <ChevronDown className="h-4 w-4 opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" /> {/* Added transition */}
     </SelectPrimitive.Icon>
