@@ -89,6 +89,7 @@ export default function CitizenDashboardPage() {
              // Sort before setting state to ensure consistent order
              currentRelevantIssues.sort((a, b) => b.reportedAt - a.reportedAt);
              setIssues(currentRelevantIssues);
+             console.log("Detected changes in mock DB, updating citizen dashboard...");
           }
       }, 2000); // Check for changes every 2 seconds
 
@@ -295,4 +296,3 @@ export default function CitizenDashboardPage() {
     </div>
   );
 }
-```

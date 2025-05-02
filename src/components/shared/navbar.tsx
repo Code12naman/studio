@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LogOut, ShieldAlert, UserCircle } from "lucide-react"; // Added UserCircle
+import { LogOut, ShieldAlert, UserCircle, Camera } from "lucide-react"; // Added Camera
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuShortcut } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar
 import { cn } from "@/lib/utils"; // Import cn utility
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog
+import AiAnalysisComponent from "@/components/shared/ai-analysis"; // Import the new component
 
 interface NavItem {
   href: string;
@@ -39,6 +41,7 @@ const mockUser = {
 export function Navbar({ navItems, userType }: NavbarProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const [isAnalysisDialogOpen, setIsAnalysisDialogOpen] = React.useState(false);
 
   const handleLogout = async () => {
     try {
@@ -66,6 +69,14 @@ export function Navbar({ navItems, userType }: NavbarProps) {
       return (names[0][0] + (names[names.length - 1][0] || '')).toUpperCase();
   }
 
+  const handleProfileClick = () => {
+    // Navigate to a profile page (create this page later)
+    // For now, just log or show a toast
+    toast({ title: "Profile Clicked", description: "User profile page is not yet implemented." });
+    // router.push(userType === 'Admin' ? '/admin/profile' : '/citizen/profile');
+  };
+
+
   return (
     <nav className="bg-card border-b sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -89,6 +100,25 @@ export function Navbar({ navItems, userType }: NavbarProps) {
             </Link>
           ))}
 
+          {/* AI Analysis Camera Icon (Citizen Only) */}
+          {userType === 'Citizen' && (
+             <Dialog open={isAnalysisDialogOpen} onOpenChange={setIsAnalysisDialogOpen}>
+                 <DialogTrigger asChild>
+                     <Button variant="ghost" size="icon" className="h-8 w-8 ml-2">
+                         <Camera className="h-5 w-5" />
+                         <span className="sr-only">Analyze Issue with Camera</span>
+                     </Button>
+                 </DialogTrigger>
+                 <DialogContent className="max-w-md">
+                     <DialogHeader>
+                         <DialogTitle>Analyze Issue with Camera</DialogTitle>
+                     </DialogHeader>
+                     {/* Integrate the AI Analysis Component */}
+                     <AiAnalysisComponent onClose={() => setIsAnalysisDialogOpen(false)} />
+                 </DialogContent>
+             </Dialog>
+          )}
+
           {/* User Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -109,12 +139,13 @@ export function Navbar({ navItems, userType }: NavbarProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-               {/* <DropdownMenuItem>
+               <DropdownMenuItem onClick={handleProfileClick}>
                  <UserCircle className="mr-2 h-4 w-4" />
                  <span>Profile</span>
-                 <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut> // Example shortcut
-               </DropdownMenuItem> */}
+                 {/* <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut> */}
+               </DropdownMenuItem>
                {/* Add other items like Settings if needed */}
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
@@ -127,4 +158,3 @@ export function Navbar({ navItems, userType }: NavbarProps) {
     </nav>
   );
 }
-```
