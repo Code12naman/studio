@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -529,52 +530,51 @@ export default function AdminDashboardPage() {
                                         </TableCell>
                                         {/* Actions */}
                                         <TableCell className="text-right space-x-1 pr-4 py-2" onClick={stopPropagation}>
-                                            <TooltipProvider delayDuration={100}>
-                                                {/* View Details Button */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                         {/* Use DialogTrigger directly if needed, but clicking row works */}
-                                                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(issue)}>
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>View Details</TooltipContent>
-                                                </Tooltip>
-                                                {/* Delete Button */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={updatingIssueId === issue.id || deletingIssueId === issue.id}>
-                                                                {deletingIssueId === issue.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Delete Issue</TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                            {/* Delete Confirmation Dialog */}
-                                            <AlertDialog>
-                                                <AlertDialogContent onClick={stopPropagation}>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                    Are you sure you want to permanently delete the issue: "{issue.title}"? This action cannot be undone.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel disabled={deletingIssueId === issue.id}>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction
-                                                    onClick={() => handleDeleteIssue(issue.id)}
-                                                    disabled={deletingIssueId === issue.id}
-                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                    >
-                                                    {deletingIssueId === issue.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                                    Confirm Delete
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                                {/* Note: Trigger is within the Tooltip */}
-                                            </AlertDialog>
+                                          <TooltipProvider delayDuration={100}>
+                                              {/* View Details Button */}
+                                              <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                      {/* Use DialogTrigger directly if needed, but clicking row works */}
+                                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(issue)}>
+                                                          <Eye className="h-4 w-4" />
+                                                      </Button>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>View Details</TooltipContent>
+                                              </Tooltip>
+                                              {/* Delete Button needs its own AlertDialog context */}
+                                              <AlertDialog>
+                                                  <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                          <AlertDialogTrigger asChild>
+                                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={updatingIssueId === issue.id || deletingIssueId === issue.id}>
+                                                                  {deletingIssueId === issue.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                              </Button>
+                                                          </AlertDialogTrigger>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent>Delete Issue</TooltipContent>
+                                                  </Tooltip>
+                                                  {/* Delete Confirmation Dialog */}
+                                                  <AlertDialogContent onClick={stopPropagation}>
+                                                      <AlertDialogHeader>
+                                                          <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                                          <AlertDialogDescription>
+                                                          Are you sure you want to permanently delete the issue: "{issue.title}"? This action cannot be undone.
+                                                          </AlertDialogDescription>
+                                                      </AlertDialogHeader>
+                                                      <AlertDialogFooter>
+                                                          <AlertDialogCancel disabled={deletingIssueId === issue.id}>Cancel</AlertDialogCancel>
+                                                          <AlertDialogAction
+                                                              onClick={() => handleDeleteIssue(issue.id)}
+                                                              disabled={deletingIssueId === issue.id}
+                                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                          >
+                                                              {deletingIssueId === issue.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                              Confirm Delete
+                                                          </AlertDialogAction>
+                                                      </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                              </AlertDialog>
+                                          </TooltipProvider>
                                         </TableCell>
                                     </TableRow>
                                 ))
