@@ -88,13 +88,14 @@ export function Navbar({ navItems, userType }: NavbarProps) {
         </Link>
         <div className="flex items-center gap-1"> {/* Reduced gap slightly */}
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href} passHref>
+            <Link key={item.href} href={item.href} passHref legacyBehavior>
               <Button
                  variant={item.isActive ? "secondary" : "ghost"} // Use secondary variant for active link
                  className={cn(
                     "text-foreground hover:text-primary",
                     item.isActive && "font-semibold text-primary" // Add specific active styles
                  )}
+                 as="a" // Ensure Button renders as an anchor tag for proper navigation
                >
                  {item.icon && <span className="mr-2">{item.icon}</span>}
                  {item.label}
