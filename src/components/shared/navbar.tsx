@@ -1,3 +1,4 @@
+
  "use client";
 
 import Link from "next/link";
@@ -5,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { LogOut, ShieldAlert, UserCircle, Camera } from "lucide-react"; // Added Camera
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuShortcut } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar
 import { cn } from "@/lib/utils"; // Import cn utility
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog
-import AiAnalysisComponent from "@/components/shared/ai-analysis"; // Import the new component
+import AiAnalysisComponent from "@/components/shared/ai-analysis"; // Verified import path
+import React from "react"; // Import React
 
 interface NavItem {
   href: string;

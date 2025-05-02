@@ -66,4 +66,3 @@ const analyzeIssueImageFlow = ai.defineFlow<
     return output;
   }
 );
-```
