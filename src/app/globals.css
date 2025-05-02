@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; /* Moved font-family here */
+  @apply bg-background text-foreground transition-colors duration-200; /* Added smooth transition */
 }
 
 @layer base {
@@ -81,7 +82,7 @@ body {
     --accent: 145 63% 49%; /* #2ecc71 */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 40%; /* Darker Red */
+    --destructive: 0 70% 50%; /* Slightly brighter Red in dark mode for visibility */
     --destructive-foreground: 0 0% 98%;
 
     --border: 210 5% 30%; /* Medium Gray border */
@@ -100,7 +101,7 @@ body {
     --sidebar-primary: 207 68% 53%; /* #3498db */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 9% 25%; /* Dark gray for hover/active */
-    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-accent-foreground: 0 0% 98%; /* Keep text white/light on accent */
     --sidebar-border: 210 5% 30%; /* Medium Gray border */
     --sidebar-ring: 207 68% 53%;
   }
@@ -110,21 +111,19 @@ body {
   * {
     @apply border-border;
   }
-  body {
-    @apply bg-background text-foreground font-sans; /* Added sans-serif font */
-  }
+  /* Body styles moved to the top */
 }
 
 /* Add clean and readable sans-serif font */
 @layer base {
   html {
-    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    /* font-family moved to body */
     line-height: 1.5;
     font-weight: 400;
 
     color-scheme: light dark;
-    color: var(--foreground);
-    background-color: var(--background);
+    color: var(--foreground); /* Use CSS var */
+    background-color: var(--background); /* Use CSS var */
 
     font-synthesis: none;
     text-rendering: optimizeLegibility;
