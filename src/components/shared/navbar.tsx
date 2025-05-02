@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -7,8 +8,8 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils"; // Import cn utility
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog
 import AiAnalysisComponent from "@/components/shared/ai-analysis"; // Verified import path
 import React from "react";
 
@@ -68,12 +69,9 @@ export function Navbar({ navItems, userType }: NavbarProps) {
       return (names[0][0] + (names[names.length - 1][0] || '')).toUpperCase();
   };
 
-  const handleProfileClick = () => {
-    // Placeholder action: Log or show a toast. Implement navigation later.
-    toast({ title: "Profile Feature", description: "User profile page is under development." });
-    // Example future navigation:
-    // router.push(userType === 'Admin' ? '/admin/profile' : '/citizen/profile');
-  };
+  // No handleProfileClick needed, we use Link directly
+
+  const profileHref = userType === 'Admin' ? '/admin/profile' : '/citizen/profile';
 
   return (
     <nav className="bg-card border-b sticky top-0 z-50 shadow-sm backdrop-blur-sm bg-opacity-90">
@@ -143,11 +141,12 @@ export function Navbar({ navItems, userType }: NavbarProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-               <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer">
-                 <UserCircle className="mr-2 h-4 w-4" />
-                 <span>Profile</span>
-                 {/* Optional: Add shortcut display */}
-                 {/* <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut> */}
+               {/* Use Link component inside DropdownMenuItem with asChild */}
+               <DropdownMenuItem asChild className="cursor-pointer">
+                 <Link href={profileHref}>
+                   <UserCircle className="mr-2 h-4 w-4" />
+                   <span>Profile</span>
+                 </Link>
                </DropdownMenuItem>
                {/* Add other items like Settings if needed */}
               <DropdownMenuSeparator />

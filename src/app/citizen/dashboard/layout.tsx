@@ -1,7 +1,8 @@
+
 "use client"; // Required for using hooks like usePathname
 
 import { Navbar } from "@/components/shared/navbar";
-import { FilePenLine, History, UserCircle } from 'lucide-react'; // Import icons for nav items
+import { FilePenLine, History } from 'lucide-react'; // Import icons for nav items
 import { usePathname } from 'next/navigation'; // Import usePathname
 
 export default function CitizenDashboardLayout({
@@ -16,7 +17,6 @@ export default function CitizenDashboardLayout({
     { href: "/citizen/dashboard", label: "My Issues", icon: <History className="h-4 w-4" />, isActive: pathname === "/citizen/dashboard" },
     // The profile link is handled by the dropdown in the Navbar now.
     // Keeping this structure allows adding more main nav links easily if needed later.
-    // { href: "/citizen/profile", label: "Profile", icon: <UserCircle className="h-4 w-4" />, isActive: pathname === "/citizen/profile" }, // Placeholder for profile page
   ];
 
   return (

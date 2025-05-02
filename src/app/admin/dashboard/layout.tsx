@@ -1,7 +1,8 @@
+
 "use client"; // Required for using hooks like usePathname
 
 import { Navbar } from "@/components/shared/navbar";
-import { ListChecks, Users, UserCircle } from 'lucide-react'; // Import icons for nav items
+import { ListChecks, Users } from 'lucide-react'; // Import icons for nav items
 import { usePathname } from 'next/navigation'; // Import usePathname
 
 export default function AdminDashboardLayout({
