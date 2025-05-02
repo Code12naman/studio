@@ -8,28 +8,67 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Edit, Save, KeyRound, User, Mail, ListChecks, Star, CheckCircle, MessageSquare, Camera, Phone, MapPin, Settings, Activity } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs components
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea
-import { Badge } from "@/components/ui/badge"; // Import Badge
+import { Edit, Save, KeyRound, User, Mail, ListChecks, Star, CheckCircle, MessageSquare, Camera, Phone, MapPin, Settings, Activity, Info, LoaderCircle } from "lucide-react"; // Added Info, LoaderCircle
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import React, { useState } from 'react';
+import { formatDistanceToNowStrict } from 'date-fns'; // Import date-fns function
 
-// Mock user data (replace with actual data fetching/auth context)
+// Mock user data
 const mockUser = {
     id: 'citizen123',
     email: "citizen@example.com",
     displayName: "Demo Citizen",
-    photoURL: `https://picsum.photos/seed/citizen123/100/100`, // Example placeholder
-    createdAt: new Date(2023, 10, 15), // Example registration date as Date object
-    phone: "+91 98765 43210", // Add phone
-    location: "Bangalore, Karnataka", // Add location
-    bio: "Passionate about improving my community. I've been reporting local issues in Bangalore for over 2 years.", // Add bio
-    // Mock stats for citizen
+    photoURL: `https://picsum.photos/seed/citizen123/100/100`,
+    createdAt: new Date(2023, 10, 15),
+    phone: "+91 98765 43210",
+    location: "Bangalore, Karnataka",
+    bio: "Passionate about improving my community. I've been reporting local issues in Bangalore for over 2 years.",
     reportsSubmitted: 27,
     reportsResolved: 19,
     commentsMade: 42,
-    badges: ["Active Member", "Top Reporter"], // Example badges
+    badges: ["Active Member", "Top Reporter"],
 };
+
+// Mock Activity Data
+const mockActivities = [
+  {
+    id: 'act1',
+    type: 'report',
+    title: 'Large Pothole on Main St',
+    status: 'Pending',
+    timestamp: new Date(2024, 6, 15, 10, 30),
+  },
+  {
+    id: 'act2',
+    type: 'resolve',
+    title: 'Overflowing Bin',
+    status: 'Resolved',
+    timestamp: new Date(2024, 6, 12, 15, 0),
+  },
+  {
+    id: 'act3',
+    type: 'comment',
+    title: 'Streetlight Out',
+    comment: 'Any updates on this? It\'s still dark.',
+    timestamp: new Date(2024, 6, 10, 9, 0),
+  },
+   {
+    id: 'act4',
+    type: 'report',
+    title: 'Broken Park Bench',
+    status: 'In Progress',
+    timestamp: new Date(2024, 6, 8, 14, 15),
+  },
+  {
+    id: 'act5',
+    type: 'update', // Simulate an update from admin side
+    title: 'Broken Park Bench',
+    update: 'Assigned to parks department. Status changed to In Progress.',
+    timestamp: new Date(2024, 6, 9, 11, 0),
+  },
+].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()); // Sort by newest first
 
 const getInitials = (name: string | null | undefined): string => {
     if (!name) return "?";
@@ -38,10 +77,27 @@ const getInitials = (name: string | null | undefined): string => {
     return (names[0][0] + (names[names.length - 1][0] || '')).toUpperCase();
 };
 
+const ActivityIcon = ({ type, status }: { type: string; status?: string }) => {
+  const className = "h-5 w-5 mt-1";
+  switch (type) {
+    case 'report':
+      return <ListChecks className={`${className} text-primary`} />;
+    case 'resolve':
+      return <CheckCircle className={`${className} text-accent`} />;
+    case 'comment':
+      return <MessageSquare className={`${className} text-muted-foreground`} />;
+    case 'update':
+        if (status === 'In Progress') return <LoaderCircle className={`${className} text-primary animate-spin`} />;
+        return <Info className={`${className} text-blue-500`} />; // Generic update icon
+    default:
+      return <Activity className={`${className} text-muted-foreground`} />;
+  }
+};
+
 export default function CitizenProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
     const [displayName, setDisplayName] = useState(mockUser.displayName);
-    const [email, setEmail] = useState(mockUser.email); // Email is typically read-only
+    const [email, setEmail] = useState(mockUser.email);
     const [phone, setPhone] = useState(mockUser.phone);
     const [location, setLocation] = useState(mockUser.location);
     const [bio, setBio] = useState(mockUser.bio);
@@ -49,9 +105,7 @@ export default function CitizenProfilePage() {
 
     const handleEditToggle = () => {
         if (isEditing) {
-            // Save logic (mock) - In a real app, update this via API call
             console.log("Saving profile:", { displayName, phone, location, bio });
-            // Update mockUser details locally for demo purposes
             mockUser.displayName = displayName;
             mockUser.phone = phone;
             mockUser.location = location;
@@ -62,11 +116,9 @@ export default function CitizenProfilePage() {
     };
 
     const handleChangePassword = () => {
-        // Placeholder for password change functionality
         toast({ title: "Change Password", description: "Password change feature coming soon." });
     };
 
-    // Stat display component
     const StatItem = ({ value, label }: { value: number | string; label: string }) => (
         <div className="text-center">
             <p className="text-2xl font-bold">{value}</p>
@@ -113,7 +165,6 @@ export default function CitizenProfilePage() {
                             <StatItem value={mockUser.commentsMade} label="Comments" />
                         </div>
                     </CardContent>
-                    {/* Removed footer, save button is in the tabs now */}
                 </Card>
 
                 {/* Right Column: Tabs */}
@@ -121,6 +172,7 @@ export default function CitizenProfilePage() {
                     <Tabs defaultValue="personal-info">
                         <TabsList className="grid w-full grid-cols-3 mb-6 shadow-inner bg-muted">
                             <TabsTrigger value="personal-info"><User className="mr-1.5 h-4 w-4"/>Personal Info</TabsTrigger>
+                            {/* Removed disabled prop */}
                             <TabsTrigger value="activity"><Activity className="mr-1.5 h-4 w-4"/>Activity</TabsTrigger>
                             <TabsTrigger value="settings"><Settings className="mr-1.5 h-4 w-4"/>Settings</TabsTrigger>
                         </TabsList>
@@ -190,45 +242,42 @@ export default function CitizenProfilePage() {
                             </Card>
                         </TabsContent>
 
-                        {/* Activity Tab */}
-                        <TabsContent value="activity">
+                        {/* Activity Tab - Now with content */}
+                         <TabsContent value="activity">
                             <Card className="shadow-lg">
                                 <CardHeader>
                                     <CardTitle>Recent Activity</CardTitle>
-                                    <CardDescription>Your recent reports and comments.</CardDescription>
+                                    <CardDescription>Your recent reports, comments, and issue updates.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {/* Placeholder for activity feed - map over recent user activities */}
-                                    <div className="space-y-4">
-                                        <div className="flex items-start gap-3">
-                                            <ListChecks className="h-5 w-5 text-primary mt-1"/>
-                                            <div>
-                                                <p className="text-sm">You reported <span className="font-medium">"Large Pothole on Main St"</span></p>
-                                                <p className="text-xs text-muted-foreground">2 days ago</p>
-                                            </div>
+                                    {mockActivities.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {mockActivities.map((activity, index) => (
+                                                <React.Fragment key={activity.id}>
+                                                    <div className="flex items-start gap-3">
+                                                        <ActivityIcon type={activity.type} status={activity.status} />
+                                                        <div className="flex-1">
+                                                            <p className="text-sm leading-snug">
+                                                                {activity.type === 'report' && <>You reported <span className="font-medium">"{activity.title}"</span></>}
+                                                                {activity.type === 'resolve' && <>Your report <span className="font-medium">"{activity.title}"</span> was resolved.</>}
+                                                                {activity.type === 'comment' && <>You commented on <span className="font-medium">"{activity.title}"</span>: <em className="text-muted-foreground">"{activity.comment}"</em></>}
+                                                                 {activity.type === 'update' && <>Update on <span className="font-medium">"{activity.title}"</span>: <span className="text-muted-foreground">{activity.update}</span></>}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                                {formatDistanceToNowStrict(activity.timestamp, { addSuffix: true })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {index < mockActivities.length - 1 && <Separator />}
+                                                </React.Fragment>
+                                            ))}
                                         </div>
-                                         <Separator />
-                                         <div className="flex items-start gap-3">
-                                             <CheckCircle className="h-5 w-5 text-accent mt-1"/>
-                                            <div>
-                                                <p className="text-sm">Your report <span className="font-medium">"Overflowing Bin"</span> was resolved.</p>
-                                                <p className="text-xs text-muted-foreground">5 days ago</p>
-                                            </div>
-                                        </div>
-                                         <Separator />
-                                         <div className="flex items-start gap-3">
-                                             <MessageSquare className="h-5 w-5 text-muted-foreground mt-1"/>
-                                            <div>
-                                                <p className="text-sm">You commented on <span className="font-medium">"Streetlight Out"</span></p>
-                                                <p className="text-xs text-muted-foreground">1 week ago</p>
-                                            </div>
-                                        </div>
-                                         {/* Add more activity items */}
-                                    </div>
-                                     <p className="text-muted-foreground text-center py-8 mt-6">More activity details coming soon.</p>
+                                    ) : (
+                                        <p className="text-muted-foreground text-center py-8">No recent activity found.</p>
+                                    )}
                                 </CardContent>
                             </Card>
-                        </TabsContent>
+                         </TabsContent>
 
                         {/* Settings Tab */}
                         <TabsContent value="settings">
@@ -243,13 +292,11 @@ export default function CitizenProfilePage() {
                                         <Button variant="outline" onClick={handleChangePassword} className="w-full sm:w-auto">
                                             <KeyRound className="mr-2 h-4 w-4" /> Change Password
                                         </Button>
-                                        {/* Add other security options like 2FA later */}
                                     </div>
                                      <Separator />
                                      <div className="space-y-3">
                                          <h3 className="text-base font-semibold">Preferences</h3>
                                          <p className="text-sm text-muted-foreground">Notification preferences will be available here.</p>
-                                         {/* Placeholder for future settings */}
                                      </div>
                                 </CardContent>
                             </Card>

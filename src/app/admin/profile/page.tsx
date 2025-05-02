@@ -8,27 +8,66 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Edit, Save, KeyRound, User, Mail, ShieldCheck, Briefcase, BarChart3, CheckCircle, Camera, Phone, MapPin, ListChecks, Settings, Activity } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs components
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea
-import { Badge } from "@/components/ui/badge"; // Import Badge
+import { Edit, Save, KeyRound, User, Mail, ShieldCheck, Briefcase, BarChart3, CheckCircle, Camera, Phone, MapPin, ListChecks, Settings, Activity, Info, LoaderCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import React, { useState } from 'react';
+import { formatDistanceToNowStrict } from 'date-fns'; // Import date-fns function
 
-// Mock admin user data (replace with actual data fetching)
+// Mock admin user data
 const mockAdminUser = {
     id: 'admin456',
     email: "admin@example.com",
     displayName: "Admin User",
     role: "Administrator",
-    photoURL: `https://picsum.photos/seed/admin456/100/100`, // Example placeholder
-    createdAt: new Date(2023, 8, 1), // Example registration date as Date object
-    phone: "+1 123 456 7890", // Add phone
-    location: "City Hall, Metropolis", // Add location
-    bio: "Dedicated administrator ensuring smooth operation of the FixIt Local platform.", // Add bio
-    // Mock stats for admin
+    photoURL: `https://picsum.photos/seed/admin456/100/100`,
+    createdAt: new Date(2023, 8, 1),
+    phone: "+1 123 456 7890",
+    location: "City Hall, Metropolis",
+    bio: "Dedicated administrator ensuring smooth operation of the FixIt Local platform.",
     issuesManaged: 152,
     issuesResolvedThisMonth: 35,
 };
+
+// Mock Admin Activity Data
+const mockAdminActivities = [
+  {
+    id: 'admin_act1',
+    type: 'status_change',
+    issueId: 'issue2',
+    issueTitle: 'Streetlight Out',
+    oldStatus: 'Pending',
+    newStatus: 'In Progress',
+    timestamp: new Date(2024, 6, 14, 9, 0),
+  },
+  {
+    id: 'admin_act2',
+    type: 'priority_change',
+    issueId: 'issue1',
+    issueTitle: 'Large Pothole on Main St',
+    newPriority: 'High',
+    timestamp: new Date(2024, 6, 13, 11, 30),
+  },
+   {
+    id: 'admin_act3',
+    type: 'assignment',
+    issueId: 'issue5',
+    issueTitle: 'Illegal Dumping',
+    assignedTo: 'Sanitation Dept.',
+    timestamp: new Date(2024, 6, 12, 16, 45),
+  },
+   {
+    id: 'admin_act4',
+    type: 'status_change',
+    issueId: 'issue3',
+    issueTitle: 'Overflowing Bin',
+    oldStatus: 'In Progress',
+    newStatus: 'Resolved',
+    timestamp: new Date(2024, 6, 11, 10, 0),
+  },
+].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()); // Sort by newest first
+
 
 const getInitials = (name: string | null | undefined): string => {
     if (!name) return "?";
@@ -37,10 +76,27 @@ const getInitials = (name: string | null | undefined): string => {
     return (names[0][0] + (names[names.length - 1][0] || '')).toUpperCase();
 };
 
+const AdminActivityIcon = ({ type, status }: { type: string; status?: string }) => {
+  const className = "h-5 w-5 mt-1";
+  switch (type) {
+    case 'status_change':
+        if (status === 'Resolved') return <CheckCircle className={`${className} text-accent`} />;
+        if (status === 'In Progress') return <LoaderCircle className={`${className} text-primary animate-spin`} />;
+        return <Edit className={`${className} text-blue-500`} />; // Generic status change
+    case 'priority_change':
+      return <ShieldCheck className={`${className} text-orange-500`} />;
+    case 'assignment':
+      return <User className={`${className} text-purple-500`} />;
+    default:
+      return <Activity className={`${className} text-muted-foreground`} />;
+  }
+};
+
+
 export default function AdminProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
     const [displayName, setDisplayName] = useState(mockAdminUser.displayName);
-    const [email, setEmail] = useState(mockAdminUser.email); // Email is typically read-only
+    const [email, setEmail] = useState(mockAdminUser.email);
     const [phone, setPhone] = useState(mockAdminUser.phone);
     const [location, setLocation] = useState(mockAdminUser.location);
     const [bio, setBio] = useState(mockAdminUser.bio);
@@ -48,9 +104,7 @@ export default function AdminProfilePage() {
 
     const handleEditToggle = () => {
         if (isEditing) {
-            // Save logic (mock) - In a real app, update this via API call
             console.log("Saving admin profile:", { displayName, phone, location, bio });
-            // Update mockUser details locally for demo purposes
             mockAdminUser.displayName = displayName;
             mockAdminUser.phone = phone;
             mockAdminUser.location = location;
@@ -61,11 +115,9 @@ export default function AdminProfilePage() {
     };
 
     const handleChangePassword = () => {
-        // Placeholder for password change functionality
         toast({ title: "Change Password", description: "Password change feature coming soon." });
     };
 
-    // Stat display component
     const StatItem = ({ value, label }: { value: number | string; label: string }) => (
         <div className="text-center">
             <p className="text-2xl font-bold">{value}</p>
@@ -107,7 +159,6 @@ export default function AdminProfilePage() {
                             <StatItem value={mockAdminUser.issuesResolvedThisMonth} label="Resolved (Month)" />
                         </div>
                     </CardContent>
-                     {/* Removed footer, save button is in the tabs now */}
                 </Card>
 
                 {/* Right Column: Tabs */}
@@ -115,7 +166,8 @@ export default function AdminProfilePage() {
                     <Tabs defaultValue="personal-info">
                         <TabsList className="grid w-full grid-cols-3 mb-6 shadow-inner bg-muted">
                             <TabsTrigger value="personal-info"><User className="mr-1.5 h-4 w-4" />Personal Info</TabsTrigger>
-                            <TabsTrigger value="activity" disabled><Activity className="mr-1.5 h-4 w-4"/>Activity</TabsTrigger>
+                            {/* Removed disabled prop */}
+                            <TabsTrigger value="activity"><Activity className="mr-1.5 h-4 w-4"/>Activity</TabsTrigger>
                             <TabsTrigger value="settings"><Settings className="mr-1.5 h-4 w-4"/>Settings</TabsTrigger>
                         </TabsList>
 
@@ -184,15 +236,38 @@ export default function AdminProfilePage() {
                             </Card>
                         </TabsContent>
 
-                        {/* Activity Tab */}
+                        {/* Activity Tab - Now with content */}
                          <TabsContent value="activity">
                            <Card className="shadow-lg">
                                <CardHeader>
-                                   <CardTitle>Activity Log</CardTitle>
-                                   <CardDescription>Recent actions and changes you've made.</CardDescription>
+                                   <CardTitle>Admin Activity Log</CardTitle>
+                                   <CardDescription>Recent actions performed on issues.</CardDescription>
                                </CardHeader>
                                <CardContent>
-                                   <p className="text-muted-foreground text-center py-8">Admin activity log feature coming soon.</p>
+                                  {mockAdminActivities.length > 0 ? (
+                                       <div className="space-y-4">
+                                           {mockAdminActivities.map((activity, index) => (
+                                               <React.Fragment key={activity.id}>
+                                                   <div className="flex items-start gap-3">
+                                                        <AdminActivityIcon type={activity.type} status={activity.newStatus} />
+                                                       <div className="flex-1">
+                                                           <p className="text-sm leading-snug">
+                                                               {activity.type === 'status_change' && <>You changed status of <span className="font-medium">"{activity.issueTitle}"</span> from <Badge variant="outline" className="text-xs">{activity.oldStatus}</Badge> to <Badge variant="outline" className="text-xs">{activity.newStatus}</Badge></>}
+                                                               {activity.type === 'priority_change' && <>You set priority of <span className="font-medium">"{activity.issueTitle}"</span> to <Badge variant="outline" className="text-xs">{activity.newPriority}</Badge></>}
+                                                               {activity.type === 'assignment' && <>You assigned <span className="font-medium">"{activity.issueTitle}"</span> to <span className="font-medium">{activity.assignedTo}</span></>}
+                                                           </p>
+                                                           <p className="text-xs text-muted-foreground mt-0.5">
+                                                               {formatDistanceToNowStrict(activity.timestamp, { addSuffix: true })}
+                                                           </p>
+                                                       </div>
+                                                   </div>
+                                                   {index < mockAdminActivities.length - 1 && <Separator />}
+                                               </React.Fragment>
+                                           ))}
+                                       </div>
+                                   ) : (
+                                       <p className="text-muted-foreground text-center py-8">No recent admin activity found.</p>
+                                   )}
                                </CardContent>
                            </Card>
                         </TabsContent>
@@ -210,13 +285,11 @@ export default function AdminProfilePage() {
                                         <Button variant="outline" onClick={handleChangePassword} className="w-full sm:w-auto">
                                            <KeyRound className="mr-2 h-4 w-4" /> Change Password
                                         </Button>
-                                        {/* Add other security options like 2FA later */}
                                    </div>
                                     <Separator />
                                     <div className="space-y-3">
                                          <h3 className="text-base font-semibold">Preferences</h3>
                                          <p className="text-sm text-muted-foreground">Notification settings and other preferences will be available here.</p>
-                                         {/* Placeholder for future settings */}
                                     </div>
                                </CardContent>
                            </Card>
