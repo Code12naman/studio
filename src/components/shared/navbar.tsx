@@ -1,15 +1,19 @@
-"use client";
+ "use client";
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LogOut, ShieldAlert } from "lucide-react";
+import { LogOut, ShieldAlert, UserCircle } from "lucide-react"; // Added UserCircle
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar
+import { cn } from "@/lib/utils"; // Import cn utility
 
 interface NavItem {
   href: string;
   label: string;
   icon?: React.ReactNode; // Optional icon
+  isActive?: boolean; // Optional: indicates if the nav item is active
 }
 
 interface NavbarProps {
@@ -22,6 +26,15 @@ const mockSignOut = async () => {
   await new Promise(resolve => setTimeout(resolve, 500)); // Simulate delay
   console.log("User logged out");
 };
+
+// Mock user data - replace with actual user data from context/session
+const mockUser = {
+    email: "user@example.com",
+    displayName: "Demo User",
+    photoURL: `https://picsum.photos/seed/${'user123'}/40/40`, // Generate placeholder avatar based on ID
+    // In a real app, this might be null if no photo is set
+};
+
 
 export function Navbar({ navItems, userType }: NavbarProps) {
   const router = useRouter();
@@ -45,6 +58,14 @@ export function Navbar({ navItems, userType }: NavbarProps) {
     }
   };
 
+  // Generate initials for Avatar fallback
+  const getInitials = (name: string | null | undefined): string => {
+      if (!name) return "?";
+      const names = name.split(' ');
+      if (names.length === 1) return names[0][0]?.toUpperCase() ?? "?";
+      return (names[0][0] + (names[names.length - 1][0] || '')).toUpperCase();
+  }
+
   return (
     <nav className="bg-card border-b sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -52,21 +73,58 @@ export function Navbar({ navItems, userType }: NavbarProps) {
           <ShieldAlert className="h-6 w-6" />
           FixIt Local <span className="text-sm font-normal text-muted-foreground">({userType})</span>
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1"> {/* Reduced gap slightly */}
           {navItems.map((item) => (
             <Link key={item.href} href={item.href} passHref>
-              <Button variant="ghost" className="text-foreground hover:text-primary">
+              <Button
+                 variant={item.isActive ? "secondary" : "ghost"} // Use secondary variant for active link
+                 className={cn(
+                    "text-foreground hover:text-primary",
+                    item.isActive && "font-semibold text-primary" // Add specific active styles
+                 )}
+               >
                  {item.icon && <span className="mr-2">{item.icon}</span>}
                  {item.label}
               </Button>
             </Link>
           ))}
-          <Button variant="ghost" onClick={handleLogout} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+
+          {/* User Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full ml-2"> {/* Added margin */}
+                <Avatar className="h-8 w-8">
+                   <AvatarImage src={mockUser.photoURL || undefined} alt={mockUser.displayName || "User"} data-ai-hint="person face" />
+                  <AvatarFallback>{getInitials(mockUser.displayName)}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{mockUser.displayName || "User"}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {mockUser.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+               {/* <DropdownMenuItem>
+                 <UserCircle className="mr-2 h-4 w-4" />
+                 <span>Profile</span>
+                 <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut> // Example shortcut
+               </DropdownMenuItem> */}
+               {/* Add other items like Settings if needed */}
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
         </div>
       </div>
     </nav>
   );
 }
+```
