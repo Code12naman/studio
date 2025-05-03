@@ -434,11 +434,14 @@ export default function CitizenDashboardPage() {
                           <>
                               <DialogHeader className="pr-10"> {/* Add padding to avoid overlap with close button */}
                                   <DialogTitle className="text-2xl">{selectedIssue.title}</DialogTitle>
-                                   <DialogDescription className="flex flex-wrap items-center justify-between gap-2 text-sm pt-2">
-                                      <Badge variant="outline" className="flex items-center gap-1.5"><Tag className="h-4 w-4" /> {selectedIssue.type}</Badge>
-                                      <Badge variant={getPriorityBadgeVariant(selectedIssue.priority)} className="flex items-center gap-1">
-                                          {getPriorityIcon(selectedIssue.priority)} {selectedIssue.priority} Priority
-                                      </Badge>
+                                   {/* Use div instead of p for DialogDescription to allow block elements inside */}
+                                   <DialogDescription asChild>
+                                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm pt-2">
+                                            <Badge variant="outline" className="flex items-center gap-1.5"><Tag className="h-4 w-4" /> {selectedIssue.type}</Badge>
+                                            <Badge variant={getPriorityBadgeVariant(selectedIssue.priority)} className="flex items-center gap-1">
+                                                {getPriorityIcon(selectedIssue.priority)} {selectedIssue.priority} Priority
+                                            </Badge>
+                                        </div>
                                    </DialogDescription>
                               </DialogHeader>
                               <div className="grid gap-5 py-4">

@@ -277,7 +277,7 @@ export default function AdminDashboardPage() {
    };
 
    const MapLoadingSkeleton = () => (
-     <div className="h-[400px] bg-muted rounded-lg animate-pulse flex items-center justify-center text-muted-foreground">
+     <div className="h-[450px] bg-muted rounded-lg animate-pulse flex items-center justify-center text-muted-foreground">
        <Map className="h-10 w-10 opacity-50" />
        <span className="ml-2">Loading Map...</span>
      </div>
@@ -508,9 +508,12 @@ export default function AdminDashboardPage() {
                         <>
                             <DialogHeader className="pr-10">
                                 <DialogTitle className="text-2xl font-semibold">{selectedIssue.title}</DialogTitle>
-                                 <DialogDescription className="flex flex-wrap items-center justify-between gap-2 text-sm pt-2">
-                                    <Badge variant="outline" className="flex items-center gap-1.5"><Tag className="h-4 w-4" /> {selectedIssue.type}</Badge>
-                                    <Badge variant={getPriorityBadgeVariant(selectedIssue.priority)} className="flex items-center gap-1">{getPriorityIcon(selectedIssue.priority)} {selectedIssue.priority} Priority</Badge>
+                                 {/* Use div instead of p for DialogDescription to allow block elements inside */}
+                                 <DialogDescription asChild>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm pt-2">
+                                        <Badge variant="outline" className="flex items-center gap-1.5"><Tag className="h-4 w-4" /> {selectedIssue.type}</Badge>
+                                        <Badge variant={getPriorityBadgeVariant(selectedIssue.priority)} className="flex items-center gap-1">{getPriorityIcon(selectedIssue.priority)} {selectedIssue.priority} Priority</Badge>
+                                     </div>
                                  </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-5 py-4">
