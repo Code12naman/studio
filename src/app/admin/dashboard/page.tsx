@@ -14,15 +14,19 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle, AlertCircle, Image as ImageIcon, User, ShieldAlert, Clock, Eye, ListChecks, BarChart3, Map } from 'lucide-react'; // Added Map icon
+import { MapPin, Tag, Calendar, Info, Trash2, Edit, Search, Filter, CheckCircle, LoaderCircle, AlertCircle, Image as ImageIcon, User, ShieldAlert, Clock, Eye, ListChecks, BarChart3, Map } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import SummaryCard from '@/components/shared/summary-card';
+import dynamic from 'next/dynamic'; // Import dynamic
 
-// Dynamically import Leaflet components to avoid SSR issues
-const IssueMap = lazy(() => import('@/components/admin/issue-map'));
+// Dynamically import Leaflet components with SSR disabled
+const IssueMap = dynamic(() => import('@/components/admin/issue-map'), {
+    ssr: false,
+    loading: () => <MapLoadingSkeleton /> // Show skeleton while loading
+});
 
 // Mock admin user
 const mockAdminUser = {
@@ -137,6 +141,12 @@ const getDueDateColorClass = (dueDate?: number, status?: IssueStatus): string =>
 const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Other"];
 const priorities: IssuePriority[] = ["Low", "Medium", "High"];
 
+const MapLoadingSkeleton = () => (
+    <div className="h-[450px] bg-muted rounded-lg animate-pulse flex items-center justify-center text-muted-foreground">
+        <Map className="h-10 w-10 opacity-50" />
+        <span className="ml-2">Loading Map...</span>
+    </div>
+);
 
 export default function AdminDashboardPage() {
   const [issuesList, setIssuesList] = useState<Issue[]>([]);
@@ -151,13 +161,19 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [isMapVisible, setIsMapVisible] = useState(false); // State to control map visibility
+  const [isMapVisible, setIsMapVisible] = useState(false);
+  const [mapReady, setMapReady] = useState(false); // State to control map rendering
   const { toast } = useToast();
 
    const totalPending = issuesList.filter(issue => issue.status === 'Pending').length;
    const totalInProgress = issuesList.filter(issue => issue.status === 'In Progress').length;
    const totalResolved = issuesList.filter(issue => issue.status === 'Resolved').length;
    const highPriorityPending = issuesList.filter(issue => issue.status === 'Pending' && issue.priority === 'High').length;
+
+  // Effect to set mapReady after mount
+  useEffect(() => {
+      setMapReady(true);
+  }, []);
 
   useEffect(() => {
     const loadIssues = async () => {
@@ -289,12 +305,6 @@ export default function AdminDashboardPage() {
        e.stopPropagation();
    };
 
-   const MapLoadingSkeleton = () => (
-     <div className="h-[450px] bg-muted rounded-lg animate-pulse flex items-center justify-center text-muted-foreground">
-       <Map className="h-10 w-10 opacity-50" />
-       <span className="ml-2">Loading Map...</span>
-     </div>
-   );
 
   return (
     <div className="space-y-8">
@@ -325,10 +335,8 @@ export default function AdminDashboardPage() {
          {isMapVisible && (
              <Card className="shadow-md overflow-hidden">
                  <CardContent className="p-0">
-                     {/* Conditionally render Map based on client-side */}
-                      <Suspense fallback={<MapLoadingSkeleton />}>
-                          {typeof window !== 'undefined' && <IssueMap issues={filteredIssues} />}
-                      </Suspense>
+                     {/* Render map only when mapReady is true */}
+                     {mapReady ? <IssueMap issues={filteredIssues} /> : <MapLoadingSkeleton />}
                  </CardContent>
              </Card>
          )}
@@ -433,7 +441,7 @@ export default function AdminDashboardPage() {
                                         >
                                             <TableCell className="pl-4 py-2" onClick={stopPropagation}>
                                                 {issue.imageUrl ? (
-                                                    <Image src={issue.imageUrl} alt={`Image for ${issue.title}`} width={40} height={40} className="rounded-md object-cover aspect-square" data-ai-hint={getImageHint(issue.type)} />
+                                                    <Image src={issue.imageUrl} alt={`Image for ${issue.title}`} width={40} height={40} className="rounded-md object-cover aspect-square" data-ai-hint={getImageHint(issue.type)} unoptimized/>
                                                 ) : (
                                                     <div className="w-[40px] h-[40px] bg-muted rounded-md flex items-center justify-center text-muted-foreground"><ImageIcon className="h-5 w-5"/></div>
                                                 )}
@@ -537,7 +545,7 @@ export default function AdminDashboardPage() {
                             <div className="grid gap-5 py-4">
                                 <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-inner bg-muted">
                                     {selectedIssue.imageUrl ? (
-                                        <Image src={selectedIssue.imageUrl} alt={`Image for ${selectedIssue.title}`} layout="fill" objectFit="cover" data-ai-hint={getImageHint(selectedIssue.type)} className="transition-transform duration-300 hover:scale-105" />
+                                        <Image src={selectedIssue.imageUrl} alt={`Image for ${selectedIssue.title}`} layout="fill" objectFit="cover" data-ai-hint={getImageHint(selectedIssue.type)} className="transition-transform duration-300 hover:scale-105" unoptimized/>
                                     ) : (
                                          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground"><ImageIcon className="h-20 w-20 opacity-50 mb-2"/><span className="text-sm">No Image Provided</span></div>
                                     )}
@@ -614,5 +622,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    

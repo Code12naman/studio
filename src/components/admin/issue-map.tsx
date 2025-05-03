@@ -2,7 +2,7 @@
 "use client";
 
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import type { Issue, IssuePriority } from '@/types/issue';
 import L from 'leaflet';
 import { ShieldAlert, MapPin } from 'lucide-react'; // Import icons
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { useEffect, useState } from 'react'; // Import useEffect and useState
 
 // Function to get marker color based on priority
 const getMarkerColor = (priority: IssuePriority): string => {
@@ -47,6 +48,12 @@ interface IssueMapProps {
 }
 
 const IssueMap: React.FC<IssueMapProps> = ({ issues }) => {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true); // Set isClient to true after component mounts
+    }, []);
+
     // Default center and zoom (can be adjusted or made dynamic)
     const defaultCenter: L.LatLngExpression = [34.0522, -118.2437]; // Example: Los Angeles
     const defaultZoom = 11;
@@ -55,49 +62,54 @@ const IssueMap: React.FC<IssueMapProps> = ({ issues }) => {
     const validIssues = issues.filter(issue => typeof issue.location.latitude === 'number' && typeof issue.location.longitude === 'number');
 
     // Calculate center based on filtered issues if available
-     const mapCenter = validIssues.length > 0
-         ? [validIssues[0].location.latitude, validIssues[0].location.longitude] as L.LatLngExpression
-         : defaultCenter;
+    const mapCenter = validIssues.length > 0
+        ? [validIssues[0].location.latitude, validIssues[0].location.longitude] as L.LatLngExpression
+        : defaultCenter;
 
     return (
-        <MapContainer
-            center={mapCenter}
-            zoom={defaultZoom}
-            scrollWheelZoom={true}
-            style={{ height: '400px', width: '100%' }} // Ensure map has dimensions
-            className="rounded-lg z-0" // Add rounded corners and ensure map is behind UI elements if needed
-        >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {validIssues.map((issue) => (
-                <Marker
-                    key={issue.id}
-                    position={[issue.location.latitude, issue.location.longitude]}
-                    icon={createCustomIcon(issue.priority)}
-                >
-                    <Popup minWidth={200}>
-                        <div className="space-y-2">
-                             <h3 className="font-semibold text-base">{issue.title}</h3>
-                             <div className="flex justify-between items-center">
-                                <Badge variant="outline">{issue.type}</Badge>
-                                <Badge variant={issue.priority === 'High' ? 'destructive' : issue.priority === 'Medium' ? 'default' : 'secondary'}>
-                                    {issue.priority} Priority
-                                </Badge>
-                             </div>
-                             <p className="text-xs text-muted-foreground">{issue.location.address || 'Address not available'}</p>
-                             <p className="text-xs text-muted-foreground">Reported: {format(new Date(issue.reportedAt), 'MMM d, yyyy')}</p>
-                             {/* Optional: Add a button to view full details */}
-                             {/* Consider how to trigger the detail dialog from here, might need context or prop drilling */}
-                             {/* <Button size="sm" variant="link" className="p-0 h-auto" asChild>
-                                <Link href={`#issue-${issue.id}`}>View Details</Link>
-                             </Button> */}
-                        </div>
-                    </Popup>
-                </Marker>
-            ))}
-        </MapContainer>
+         <div style={{ height: '450px', width: '100%' }} className="rounded-lg overflow-hidden">
+             {isClient && ( // Only render MapContainer on the client
+                 <MapContainer
+                     // Do not use a key that changes frequently unless absolutely necessary for full re-render
+                     center={mapCenter}
+                     zoom={defaultZoom}
+                     scrollWheelZoom={true}
+                     style={{ height: '100%', width: '100%' }} // Ensure map takes full dimensions of parent
+                     className="z-0" // Ensure map is behind UI elements if needed
+                 >
+                     <TileLayer
+                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                     />
+                     {validIssues.map((issue) => (
+                         <Marker
+                             key={issue.id}
+                             position={[issue.location.latitude, issue.location.longitude]}
+                             icon={createCustomIcon(issue.priority)}
+                         >
+                             <Popup minWidth={200}>
+                                 <div className="space-y-2">
+                                     <h3 className="font-semibold text-base">{issue.title}</h3>
+                                     <div className="flex justify-between items-center">
+                                         <Badge variant="outline">{issue.type}</Badge>
+                                         <Badge variant={issue.priority === 'High' ? 'destructive' : issue.priority === 'Medium' ? 'default' : 'secondary'}>
+                                             {issue.priority} Priority
+                                         </Badge>
+                                     </div>
+                                     <p className="text-xs text-muted-foreground">{issue.location.address || 'Address not available'}</p>
+                                     <p className="text-xs text-muted-foreground">Reported: {format(new Date(issue.reportedAt), 'MMM d, yyyy')}</p>
+                                     {/* Optional: Add a button to view full details */}
+                                     {/* Consider how to trigger the detail dialog from here, might need context or prop drilling */}
+                                     {/* <Button size="sm" variant="link" className="p-0 h-auto" asChild>
+                                        <Link href={`#issue-${issue.id}`}>View Details</Link>
+                                     </Button> */}
+                                 </div>
+                             </Popup>
+                         </Marker>
+                     ))}
+                 </MapContainer>
+             )}
+         </div>
     );
 };
 
