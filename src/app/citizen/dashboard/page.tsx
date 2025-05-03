@@ -25,6 +25,11 @@ const mockCitizenUser = {
   id: 'citizen123',
 };
 
+// Available filter options
+const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Other"];
+const priorities: IssuePriority[] = ["Low", "Medium", "High"];
+const statuses: IssueStatus[] = ["Pending", "In Progress", "Resolved"];
+
 
 // Mock data fetching function - Reads from mock-db
 const mockFetchIssues = async (userId: string): Promise<Issue[]> => {
@@ -84,6 +89,8 @@ export default function CitizenDashboardPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
   const [filterStatus, setFilterStatus] = useState<IssueStatus | 'all'>('all');
+  const [filterType, setFilterType] = useState<IssueType | 'all'>('all'); // Added filter for type
+  const [filterPriority, setFilterPriority] = useState<IssuePriority | 'all'>('all'); // Added filter for priority
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +146,14 @@ export default function CitizenDashboardPage() {
      if (filterStatus !== 'all') {
        tempIssues = tempIssues.filter(issue => issue.status === filterStatus);
      }
+      // Filter by type
+      if (filterType !== 'all') {
+        tempIssues = tempIssues.filter(issue => issue.type === filterType);
+      }
+      // Filter by priority
+      if (filterPriority !== 'all') {
+        tempIssues = tempIssues.filter(issue => issue.priority === filterPriority);
+      }
 
      // Filter by search term
      if (searchTerm) {
@@ -153,7 +168,7 @@ export default function CitizenDashboardPage() {
      }
 
      setFilteredIssues(tempIssues);
-   }, [filterStatus, searchTerm, issues]);
+   }, [filterStatus, filterType, filterPriority, searchTerm, issues]); // Added filterType and filterPriority
 
 
    const getImageHint = (type: IssueType): string => {
@@ -252,34 +267,63 @@ export default function CitizenDashboardPage() {
        <section id="recent-issues" className="space-y-4">
           <div className="flex flex-wrap justify-between items-center gap-4">
              <h2 className="text-2xl font-semibold text-foreground">My Recent Issues</h2>
-             <div className="flex items-center gap-4">
-                  {/* Search Input */}
-                 <div className="relative flex-grow max-w-xs">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                     <Input
-                         type="search"
-                         placeholder="Search your issues..."
-                         value={searchTerm}
-                         onChange={(e) => setSearchTerm(e.target.value)}
-                         className="pl-10 w-full bg-card shadow-sm"
-                     />
-                 </div>
-                 {/* Status Filter */}
-                <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                   <Select value={filterStatus} onValueChange={(value: IssueStatus | 'all') => setFilterStatus(value)}>
-                     <SelectTrigger className="w-[180px] bg-card shadow-sm">
-                       <SelectValue placeholder="Filter by Status" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="all">All Statuses</SelectItem>
-                       <SelectItem value="Pending">Pending</SelectItem>
-                       <SelectItem value="In Progress">In Progress</SelectItem>
-                       <SelectItem value="Resolved">Resolved</SelectItem>
-                     </SelectContent>
-                   </Select>
-                </div>
-             </div>
+              <Card className="shadow-sm flex-grow max-w-4xl">
+                 <CardContent className="p-4 flex flex-wrap gap-4 items-center">
+                      {/* Search Input */}
+                     <div className="relative flex-grow min-w-[250px]">
+                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                         <Input
+                             type="search"
+                             placeholder="Search your issues..."
+                             value={searchTerm}
+                             onChange={(e) => setSearchTerm(e.target.value)}
+                             className="pl-10 w-full bg-background shadow-sm"
+                         />
+                     </div>
+                     {/* Filter Row */}
+                     <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+                        {/* Status Filter */}
+                        <div className="flex items-center gap-2 min-w-[160px]">
+                            <Filter className="h-4 w-4 text-muted-foreground" />
+                           <Select value={filterStatus} onValueChange={(value: IssueStatus | 'all') => setFilterStatus(value)}>
+                             <SelectTrigger className="w-full bg-background shadow-sm">
+                               <SelectValue placeholder="Filter by Status" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">All Statuses</SelectItem>
+                               {statuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}
+                             </SelectContent>
+                           </Select>
+                        </div>
+                         {/* Type Filter */}
+                         <div className="flex items-center gap-2 min-w-[160px]">
+                           <Tag className="h-4 w-4 text-muted-foreground" />
+                           <Select value={filterType} onValueChange={(value: IssueType | 'all') => setFilterType(value)}>
+                             <SelectTrigger className="w-full bg-background shadow-sm">
+                               <SelectValue placeholder="Filter by Type" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">All Types</SelectItem>
+                               {issueTypes.map((type) => (<SelectItem key={type} value={type}>{type}</SelectItem>))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                         {/* Priority Filter */}
+                         <div className="flex items-center gap-2 min-w-[160px]">
+                           <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                           <Select value={filterPriority} onValueChange={(value: IssuePriority | 'all') => setFilterPriority(value)}>
+                             <SelectTrigger className="w-full bg-background shadow-sm">
+                               <SelectValue placeholder="Filter by Priority" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">All Priorities</SelectItem>
+                               {priorities.map((priority) => (<SelectItem key={priority} value={priority}>{priority}</SelectItem>))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                     </div>
+                 </CardContent>
+              </Card>
            </div>
 
             {loading && (
@@ -322,10 +366,10 @@ export default function CitizenDashboardPage() {
                <CardContent>
                    <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                    <p className="text-lg text-muted-foreground">
-                     {searchTerm || filterStatus !== 'all' ? `No issues found matching your criteria.` : `You haven't reported any issues yet.`}
+                     {searchTerm || filterStatus !== 'all' || filterType !== 'all' || filterPriority !== 'all' ? `No issues found matching your criteria.` : `You haven't reported any issues yet.`}
                    </p>
-                   {(searchTerm || filterStatus !== 'all') ? (
-                     <Button variant="outline" onClick={() => { setSearchTerm(''); setFilterStatus('all'); }} className="mt-4">
+                   {(searchTerm || filterStatus !== 'all' || filterType !== 'all' || filterPriority !== 'all') ? (
+                     <Button variant="outline" onClick={() => { setSearchTerm(''); setFilterStatus('all'); setFilterType('all'); setFilterPriority('all'); }} className="mt-4">
                          Clear Filters/Search
                      </Button>
                    ) : (
@@ -471,7 +515,7 @@ export default function CitizenDashboardPage() {
                                       <p className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 text-primary"/> <strong>Reported:</strong> {format(new Date(selectedIssue.reportedAt), 'MMM d, yyyy HH:mm')}</p>
                                       {selectedIssue.dueDate && (
                                            <p className={`flex items-center gap-2 ${getDueDateColorClass(selectedIssue.dueDate, selectedIssue.status)}`}>
-                                               <Clock className="h-4 w-4"/> <strong>Due:</strong> {format(new Date(selectedIssue.dueDate), 'MMM d, yyyy')} {selectedIssue.status !== 'Resolved' ? `(${formatDueDate(selectedIssue.dueDate, selectedIssue.status)})` : ''}
+                                               <Clock className="h-4 w-4"/> <strong>Expected By:</strong> {format(new Date(selectedIssue.dueDate), 'MMM d, yyyy')} {selectedIssue.status !== 'Resolved' ? `(${formatDueDate(selectedIssue.dueDate, selectedIssue.status)})` : ''}
                                            </p>
                                        )}
                                       {selectedIssue.resolvedAt && (
@@ -509,3 +553,5 @@ export default function CitizenDashboardPage() {
     </div>
   );
 }
+
+    

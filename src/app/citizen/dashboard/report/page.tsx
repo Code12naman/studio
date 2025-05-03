@@ -91,7 +91,7 @@ export default function ReportIssuePage() {
      }
    });
    return () => subscription.unsubscribe();
- }, [form.watch]);
+ }, [form.watch]); // Use form.watch instead of form directly
 
  useEffect(() => {
     const initialPriority = form.getValues('priority');
@@ -170,11 +170,12 @@ export default function ReportIssuePage() {
 
 
   useEffect(() => {
-    if (form.getValues('location.latitude') === 0) {
+    // Only attempt to get location if neither coordinate is set
+    if (form.getValues('location.latitude') === 0 && form.getValues('location.longitude') === 0) {
         handleGetLocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -301,9 +302,12 @@ export default function ReportIssuePage() {
 
       setAiAnalysisResult(result);
 
-      if (!form.getValues('type')) form.setValue('type', result.detectedType);
-      if (!form.getValues('title')) form.setValue('title', result.suggestedTitle);
-      if (!form.getValues('description')) form.setValue('description', result.suggestedDescription);
+      // Only update fields if they are currently empty or were just filled by AI query params
+      if (!form.getValues('type') || form.getValues('type') === aiType) form.setValue('type', result.detectedType);
+      if (!form.getValues('title') || form.getValues('title') === aiTitle) form.setValue('title', result.suggestedTitle);
+      if (!form.getValues('description') || form.getValues('description') === aiDescription) form.setValue('description', result.suggestedDescription);
+
+      // Always update priority suggestion, but let user override
       form.setValue('priority', result.suggestedPriority);
       setCurrentPriority(result.suggestedPriority);
 
@@ -325,7 +329,7 @@ export default function ReportIssuePage() {
         const userId = 'citizen123';
         const issueId = `issue${Date.now()}${Math.random().toString(16).slice(2)}`;
         const reportedAt = Date.now();
-        const dueDate = calculateDueDate(reportedAt, data.priority);
+        const dueDate = calculateDueDate(reportedAt, data.priority); // Calculate due date
 
         // Use location data directly from the form (which now includes address)
         const submissionLocation = data.location;
@@ -351,7 +355,7 @@ export default function ReportIssuePage() {
             status: 'Pending',
             reportedById: userId,
             reportedAt: reportedAt,
-            dueDate: dueDate,
+            dueDate: dueDate, // Add the calculated due date
             imageUrl: data.imageDataUri,
         };
 
@@ -386,7 +390,10 @@ export default function ReportIssuePage() {
              let dueDateString = 'N/A';
              if (dueDate) {
                 try {
-                    dueDateString = new Date(dueDate).toLocaleDateString();
+                    // Format date to a readable string (e.g., "Jul 15, 2024")
+                    dueDateString = new Date(dueDate).toLocaleDateString('en-US', {
+                       year: 'numeric', month: 'short', day: 'numeric'
+                    });
                 } catch (e) {
                     console.error("Error formatting due date", e);
                 }
@@ -395,6 +402,7 @@ export default function ReportIssuePage() {
 
             toast({
                  title: 'Issue Reported Successfully!',
+                 // Updated description to include the expected resolution date
                  description: `Your report "${newIssue.title}" has been submitted. Expected resolution by ${dueDateString}.`,
                  duration: 5000,
             });
@@ -414,6 +422,7 @@ export default function ReportIssuePage() {
         }
     };
 
+     // Function to get descriptive text based on selected priority
      const getPriorityDescription = (priority: IssuePriority): string => {
        switch (priority) {
          case 'High': return 'High: Critical issue affecting safety or essential services. Expected resolution within 3 days.';
@@ -614,6 +623,7 @@ export default function ReportIssuePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                   {/* Display description based on currently selected priority */}
                    <FormDescription>{getPriorityDescription(currentPriority)}</FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -646,7 +656,8 @@ export default function ReportIssuePage() {
                         {...field}
                         rows={4}
                         onBlur={() => {
-                            if (imagePreview && !isAnalyzing && form.getValues('imageDataUri')) {
+                            // Re-analyze if image exists and description is potentially changed
+                            if (imagePreview && !isAnalyzing && form.getValues('imageDataUri') && form.getValues('description') !== aiDescription) {
                                 handleAiAnalysis(form.getValues('imageDataUri')!);
                             }
                         }}
@@ -720,3 +731,5 @@ export default function ReportIssuePage() {
     </Card>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 import type { Issue, IssuePriority } from '@/types/issue';
 import { addDays } from 'date-fns'; // Import addDays
 
@@ -28,7 +29,7 @@ export let allIssuesData: Issue[] = [
     status: 'Pending',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 10).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 10).getTime(), 'High'),
+    dueDate: calculateDueDate(new Date(2024, 5, 10).getTime(), 'High'), // Use function
     imageUrl: 'https://picsum.photos/seed/issue1/400/300',
   },
   {
@@ -41,7 +42,7 @@ export let allIssuesData: Issue[] = [
     status: 'In Progress',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 15).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 15).getTime(), 'Medium'),
+    dueDate: calculateDueDate(new Date(2024, 5, 15).getTime(), 'Medium'), // Use function
     assignedTo: 'Dept. of Public Works',
     imageUrl: 'https://picsum.photos/seed/issue2/400/300',
   },
@@ -55,7 +56,7 @@ export let allIssuesData: Issue[] = [
     status: 'Resolved',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 1).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 1).getTime(), 'Low'),
+    dueDate: calculateDueDate(new Date(2024, 5, 1).getTime(), 'Low'), // Use function
     resolvedAt: new Date(2024, 5, 3).getTime(),
     imageUrl: 'https://picsum.photos/seed/issue3/400/300',
   },
@@ -69,7 +70,7 @@ export let allIssuesData: Issue[] = [
     status: 'Pending',
     reportedById: 'citizen456',
     reportedAt: new Date(2024, 5, 18).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 18).getTime(), 'Medium'),
+    dueDate: calculateDueDate(new Date(2024, 5, 18).getTime(), 'Medium'), // Use function
     imageUrl: 'https://picsum.photos/seed/issue4/400/300',
   },
   {
@@ -82,7 +83,7 @@ export let allIssuesData: Issue[] = [
     status: 'In Progress',
     reportedById: 'citizen789',
     reportedAt: new Date(2024, 5, 19).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 19).getTime(), 'High'),
+    dueDate: calculateDueDate(new Date(2024, 5, 19).getTime(), 'High'), // Use function
     assignedTo: 'Sanitation Dept.',
     imageUrl: 'https://picsum.photos/seed/issue5/400/300',
   },
@@ -96,14 +97,14 @@ export let allIssuesData: Issue[] = [
     status: 'Pending',
     reportedById: 'citizen123',
     reportedAt: new Date(2024, 5, 20).getTime(),
-    dueDate: calculateDueDate(new Date(2024, 5, 20).getTime(), 'Medium'),
+    dueDate: calculateDueDate(new Date(2024, 5, 20).getTime(), 'Medium'), // Use function
     imageUrl: 'https://picsum.photos/seed/issue6/400/300',
   },
 ];
 
 // Function to add a new issue to the mock database
 export const addIssueToDb = (issue: Issue): void => {
-   // Ensure dueDate is calculated based on priority
+   // Ensure dueDate is calculated based on priority if not already set
    if (!issue.dueDate) {
      issue.dueDate = calculateDueDate(issue.reportedAt, issue.priority);
    }
@@ -147,3 +148,5 @@ export const deleteIssueFromDb = (issueId: string): boolean => {
     allIssuesData = allIssuesData.filter(issue => issue.id !== issueId);
     return allIssuesData.length < initialLength;
 };
+
+    

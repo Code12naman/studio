@@ -29,19 +29,26 @@ const mockAdminUser = {
     name: "Admin User"
 };
 
-// Mock data fetching function
+// Mock data fetching function - now returns issues sorted with due date logic
 const mockFetchAllIssues = async (): Promise<Issue[]> => {
   await new Promise(resolve => setTimeout(resolve, 500));
   return [...allIssuesData].sort((a, b) => {
+      // Resolved issues go last
       if (a.status === 'Resolved' && b.status !== 'Resolved') return 1;
       if (a.status !== 'Resolved' && b.status === 'Resolved') return -1;
+
+      // Sort by priority (High first)
       const priorityOrder: Record<IssuePriority, number> = { High: 1, Medium: 2, Low: 3 };
       if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
           return priorityOrder[a.priority] - priorityOrder[b.priority];
       }
+
+      // Sort by due date (soonest first, N/A last within priority)
       const dueDateA = a.dueDate || Infinity;
       const dueDateB = b.dueDate || Infinity;
       if (dueDateA !== dueDateB) return dueDateA - dueDateB;
+
+      // Finally, sort by reported date (newest first)
       return b.reportedAt - a.reportedAt;
   });
 };
@@ -107,6 +114,7 @@ const getStatusIcon = (status: IssueStatus): React.ReactNode => {
     }
 };
 
+// Updated function to format due date string
 const formatDueDate = (dueDate?: number, status?: IssueStatus): string => {
     if (!dueDate || status === 'Resolved') return 'N/A';
     const now = Date.now();
@@ -116,13 +124,14 @@ const formatDueDate = (dueDate?: number, status?: IssueStatus): string => {
     return `Due in ${formatDistanceToNowStrict(dueDate, { addSuffix: false })}`;
 };
 
+// Updated function to get color class based on due date urgency
 const getDueDateColorClass = (dueDate?: number, status?: IssueStatus): string => {
     if (!dueDate || status === 'Resolved') return 'text-muted-foreground';
     const now = Date.now();
     const daysRemaining = (dueDate - now) / (1000 * 60 * 60 * 24);
-    if (daysRemaining < 0) return 'text-destructive font-semibold';
-    if (daysRemaining <= 2) return 'text-orange-500 font-medium';
-    return 'text-muted-foreground';
+    if (daysRemaining < 0) return 'text-destructive font-semibold'; // Overdue
+    if (daysRemaining <= 2) return 'text-orange-500 font-medium'; // Due within 2 days
+    return 'text-muted-foreground'; // Due further out or N/A
 };
 
 const issueTypes: IssueType[] = ["Road", "Garbage", "Streetlight", "Park", "Other"];
@@ -209,7 +218,9 @@ export default function AdminDashboardPage() {
        const updatedList = await mockFetchAllIssues();
        setIssuesList(updatedList);
        if (selectedIssue && selectedIssue.id === issueId) {
-         setSelectedIssue(prev => prev ? {...prev, status: newStatus, resolvedAt: newStatus === 'Resolved' ? Date.now() : prev.resolvedAt} : null);
+         // Also update due date if priority changes impact it (handled in mockUpdateIssuePriority)
+         const updatedIssueFromDb = updatedList.find(i => i.id === issueId);
+         setSelectedIssue(updatedIssueFromDb || null);
        }
        toast({ title: "Status Updated", description: `Issue marked as ${newStatus}.` });
     } catch (err: any) {
@@ -227,7 +238,9 @@ export default function AdminDashboardPage() {
       const updatedList = await mockFetchAllIssues();
       setIssuesList(updatedList);
        if (selectedIssue && selectedIssue.id === issueId) {
-         setSelectedIssue(prev => prev ? {...prev, priority: newPriority} : null);
+         // Update the selected issue with new priority and potentially new due date
+          const updatedIssueFromDb = updatedList.find(i => i.id === issueId);
+          setSelectedIssue(updatedIssueFromDb || null);
        }
        toast({ title: "Priority Updated", description: `Issue priority set to ${newPriority}.` });
     } catch (err: any) {
@@ -393,7 +406,8 @@ export default function AdminDashboardPage() {
                                     <TableHead className="min-w-[200px]">Title</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead>Priority</TableHead>
-                                    <TableHead>Due / Overdue</TableHead>
+                                    {/* Added Due / Overdue column */}
+                                    <TableHead className="min-w-[130px]">Due / Overdue</TableHead>
                                     <TableHead className="min-w-[150px]">Location</TableHead>
                                     <TableHead className="min-w-[150px]">Reported</TableHead>
                                     <TableHead className="min-w-[130px]">Status</TableHead>
@@ -438,7 +452,8 @@ export default function AdminDashboardPage() {
                                                      </SelectContent>
                                                  </Select>
                                             </TableCell>
-                                             <TableCell className={`text-xs max-w-[120px] truncate py-2 ${getDueDateColorClass(issue.dueDate, issue.status)}`} title={issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : 'N/A'}>
+                                             {/* Due Date / Overdue Cell */}
+                                             <TableCell className={`text-xs max-w-[130px] truncate py-2 ${getDueDateColorClass(issue.dueDate, issue.status)}`} title={issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : 'N/A'}>
                                                 <Clock className="h-3 w-3 inline mr-1 align-[-0.1em]"/> {formatDueDate(issue.dueDate, issue.status)}
                                              </TableCell>
                                             <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate py-2" title={issue.location.address || `${issue.location.latitude.toFixed(4)}, ${issue.location.longitude.toFixed(4)}`}>
@@ -468,30 +483,33 @@ export default function AdminDashboardPage() {
                                                       </TooltipTrigger>
                                                       <TooltipContent>View Details</TooltipContent>
                                                   </Tooltip>
+                                                  {/* Wrap AlertDialogTrigger inside AlertDialog */}
                                                   <AlertDialog>
-                                                      <Tooltip>
-                                                          <TooltipTrigger asChild>
-                                                              <AlertDialogTrigger asChild onClick={stopPropagation}>
-                                                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={updatingIssueId === issue.id || deletingIssueId === issue.id}>
-                                                                      {deletingIssueId === issue.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                                  </Button>
-                                                              </AlertDialogTrigger>
-                                                          </TooltipTrigger>
-                                                          <TooltipContent>Delete Issue</TooltipContent>
-                                                      </Tooltip>
-                                                      <AlertDialogContent onClick={stopPropagation}>
-                                                          <AlertDialogHeader>
-                                                              <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                              <AlertDialogDescription>Are you sure you want to permanently delete the issue: "{issue.title}"? This action cannot be undone.</AlertDialogDescription>
-                                                          </AlertDialogHeader>
-                                                          <AlertDialogFooter>
-                                                              <AlertDialogCancel disabled={deletingIssueId === issue.id}>Cancel</AlertDialogCancel>
-                                                              <AlertDialogAction onClick={() => handleDeleteIssue(issue.id)} disabled={deletingIssueId === issue.id} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                                  {deletingIssueId === issue.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm Delete
-                                                              </AlertDialogAction>
-                                                          </AlertDialogFooter>
-                                                      </AlertDialogContent>
-                                                  </AlertDialog>
+                                                     <Tooltip>
+                                                         <TooltipTrigger asChild>
+                                                             {/* AlertDialogTrigger triggers the dialog */}
+                                                             <AlertDialogTrigger asChild onClick={stopPropagation}>
+                                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={updatingIssueId === issue.id || deletingIssueId === issue.id}>
+                                                                     {deletingIssueId === issue.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                                 </Button>
+                                                             </AlertDialogTrigger>
+                                                         </TooltipTrigger>
+                                                         <TooltipContent>Delete Issue</TooltipContent>
+                                                     </Tooltip>
+                                                     {/* AlertDialogContent contains the confirmation */}
+                                                     <AlertDialogContent onClick={stopPropagation}>
+                                                         <AlertDialogHeader>
+                                                             <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                                             <AlertDialogDescription>Are you sure you want to permanently delete the issue: "{issue.title}"? This action cannot be undone.</AlertDialogDescription>
+                                                         </AlertDialogHeader>
+                                                         <AlertDialogFooter>
+                                                             <AlertDialogCancel disabled={deletingIssueId === issue.id}>Cancel</AlertDialogCancel>
+                                                             <AlertDialogAction onClick={() => handleDeleteIssue(issue.id)} disabled={deletingIssueId === issue.id} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                                 {deletingIssueId === issue.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm Delete
+                                                             </AlertDialogAction>
+                                                         </AlertDialogFooter>
+                                                     </AlertDialogContent>
+                                                 </AlertDialog>
                                               </TooltipProvider>
                                             </TableCell>
                                         </TableRow>
@@ -530,12 +548,20 @@ export default function AdminDashboardPage() {
                                     <p className="flex items-start gap-2 text-muted-foreground"><MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0"/> <span><strong>Location:</strong> {selectedIssue.location.address || `${selectedIssue.location.latitude.toFixed(5)}, ${selectedIssue.location.longitude.toFixed(5)}`}</span></p>
                                     <p className="flex items-center gap-2 text-muted-foreground"><User className="h-4 w-4 text-primary"/> <strong>Reporter ID:</strong> {selectedIssue.reportedById}</p>
                                     <p className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 text-primary"/> <strong>Reported:</strong> {format(new Date(selectedIssue.reportedAt), 'MMM d, yyyy HH:mm')}</p>
+                                    {/* Display Due Date in Dialog */}
                                     {selectedIssue.dueDate && (
-                                        <p className={`flex items-center gap-2 ${getDueDateColorClass(selectedIssue.dueDate, selectedIssue.status)}`}><Clock className="h-4 w-4"/> <strong>Due:</strong> {format(new Date(selectedIssue.dueDate), 'MMM d, yyyy')} {selectedIssue.status !== 'Resolved' ? `(${formatDueDate(selectedIssue.dueDate, selectedIssue.status)})` : ''}</p>
+                                        <p className={`flex items-center gap-2 ${getDueDateColorClass(selectedIssue.dueDate, selectedIssue.status)}`}>
+                                            <Clock className="h-4 w-4"/> <strong>Expected By:</strong> {format(new Date(selectedIssue.dueDate), 'MMM d, yyyy')} {selectedIssue.status !== 'Resolved' ? `(${formatDueDate(selectedIssue.dueDate, selectedIssue.status)})` : ''}
+                                        </p>
                                     )}
                                     {selectedIssue.resolvedAt && (
                                         <p className="flex items-center gap-2 text-accent"><CheckCircle className="h-4 w-4"/> <strong>Resolved:</strong> {format(new Date(selectedIssue.resolvedAt), 'MMM d, yyyy HH:mm')}</p>
                                     )}
+                                     {/* Status in Dialog */}
+                                     <div className="flex items-center gap-2 pt-1">
+                                        <span className="w-4 h-4">{getStatusIcon(selectedIssue.status)}</span>
+                                        <strong>Status:</strong> <Badge variant={getStatusBadgeVariant(selectedIssue.status)} className="text-sm">{selectedIssue.status}</Badge>
+                                     </div>
                                     {selectedIssue.assignedTo && (
                                         <p className="flex items-center gap-2 text-muted-foreground pt-1"><User className="h-4 w-4 text-primary"/> <strong>Assigned To:</strong> {selectedIssue.assignedTo}</p>
                                     )}
@@ -588,3 +614,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
