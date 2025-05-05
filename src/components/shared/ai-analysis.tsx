@@ -58,26 +58,58 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
     const getCameraPermission = async () => {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); // Prefer rear camera
-          mediaStreamRef.current = stream; // Store the stream
-          setHasCameraPermission(true);
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+          // Check permission status first without prompting
+          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          if (permissionStatus.state === 'granted') {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); // Prefer rear camera
+              mediaStreamRef.current = stream; // Store the stream
+              setHasCameraPermission(true);
+              if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+              }
+          } else if (permissionStatus.state === 'prompt') {
+              // Only prompt if permission is not yet granted or denied
+              const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+              mediaStreamRef.current = stream;
+              setHasCameraPermission(true);
+              if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+              }
+          } else { // denied state
+              console.warn('Camera permission denied.');
+              setHasCameraPermission(false);
+              toast({
+                variant: 'destructive',
+                title: 'Camera Access Denied',
+                description: 'Camera permission denied. You can still upload an image.',
+              });
           }
+           // Listen for changes in permission state
+          permissionStatus.onchange = () => {
+              setHasCameraPermission(permissionStatus.state === 'granted');
+              if (permissionStatus.state !== 'granted' && mediaStreamRef.current) {
+                  stopCamera(); // Stop camera if permission is revoked
+              }
+          };
+
         } catch (err) {
           console.error('Error accessing camera:', err);
           setHasCameraPermission(false);
-          // Don't set a blocking error, allow upload
-          // setError('Camera access denied. Please enable permissions in your browser settings.');
+          setError(`Camera access failed: ${err instanceof Error ? err.message : String(err)}. Please check permissions or try uploading.`);
           toast({
             variant: 'destructive',
-            title: 'Camera Access Denied',
-            description: 'Camera permission denied. You can still upload an image.',
+            title: 'Camera Error',
+            description: 'Could not access camera. Check permissions or try uploading.',
           });
         }
       } else {
         setHasCameraPermission(false);
         setError('Camera not supported on this device or browser.');
+         toast({
+            variant: 'destructive',
+            title: 'Camera Error',
+            description: 'Camera not supported.',
+          });
       }
     };
 
@@ -103,22 +135,38 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         const context = canvas.getContext('2d');
 
         if (context) {
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-             // Use JPEG with quality setting for potentially smaller size
-            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
+            try {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                 // Use JPEG with quality setting for potentially smaller size
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
 
-            // Check image size - optional, but good for debugging
-            const imageSizeInBytes = Math.round((imageDataUrl.length * (3/4)) - (imageDataUrl.endsWith('==') ? 2 : (imageDataUrl.endsWith('=') ? 1 : 0)));
-            console.log(`Captured image size: ${Math.round(imageSizeInBytes / 1024)} KB`);
+                if (!imageDataUrl || imageDataUrl === 'data:,') {
+                   throw new Error("Canvas generated an empty image data URL.");
+                }
 
-            setCapturedImage(imageDataUrl);
-            stopCamera(); // Stop camera after capture
-            handleAnalysis(imageDataUrl); // Trigger analysis immediately
+                // Check image size - optional, but good for debugging
+                const imageSizeInBytes = Math.round((imageDataUrl.length * (3/4)) - (imageDataUrl.endsWith('==') ? 2 : (imageDataUrl.endsWith('=') ? 1 : 0)));
+                console.log(`Captured image size: ${Math.round(imageSizeInBytes / 1024)} KB`);
+
+                setCapturedImage(imageDataUrl);
+                stopCamera(); // Stop camera after capture
+                handleAnalysis(imageDataUrl); // Trigger analysis immediately
+            } catch (captureError) {
+                 console.error("Error during image capture or processing:", captureError);
+                 setError(`Capture failed: ${captureError instanceof Error ? captureError.message : String(captureError)}`);
+                 toast({ variant: 'destructive', title: 'Capture Failed', description: 'Could not process image from camera.' });
+            }
         } else {
+             console.error("Could not get 2D context from canvas.");
              setError("Could not get canvas context to capture image.");
-             toast({ variant: 'destructive', title: 'Capture Failed', description: 'Could not process image.' });
+             toast({ variant: 'destructive', title: 'Capture Failed', description: 'Could not get canvas context.' });
         }
         setIsCapturing(false); // Indicate capture/processing finished
+    } else {
+        console.warn("Capture attempt failed: Video ref, canvas ref, or isCapturing state issue.");
+        if (!videoRef.current) setError("Camera feed not available.");
+        else if (!canvasRef.current) setError("Canvas element not ready.");
+        else if (isCapturing) setError("Capture already in progress.");
     }
   };
 
@@ -133,6 +181,13 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
       reader.onloadend = () => {
         const base64String = reader.result as string;
 
+         if (!base64String || base64String === 'data:,') {
+            setError('Failed to read the uploaded file correctly.');
+            toast({ variant: 'destructive', title: 'File Read Error', description: 'Could not read image data from file.' });
+            setIsCapturing(false);
+            return;
+        }
+
         // Check image size
          const imageSizeInBytes = Math.round((base64String.length * (3/4)) - (base64String.endsWith('==') ? 2 : (base64String.endsWith('=') ? 1 : 0)));
          console.log(`Uploaded image size: ${Math.round(imageSizeInBytes / 1024)} KB`);
@@ -142,7 +197,8 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         handleAnalysis(base64String); // Trigger analysis immediately
         setIsCapturing(false);
       };
-      reader.onerror = () => {
+      reader.onerror = (err) => {
+         console.error("FileReader error:", err);
         setError('Failed to read the uploaded file.');
         toast({
           variant: 'destructive',
@@ -165,19 +221,26 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
 
   // Handle AI Analysis
   const handleAnalysis = async (imageDataUri: string) => {
-    if (!imageDataUri) {
-      setError('No image available for analysis.');
+    if (!imageDataUri || imageDataUri === 'data:,') {
+      setError('No valid image available for analysis.');
+      console.error('handleAnalysis called with invalid imageDataUri');
       return;
     }
     setIsLoading(true); // Start analysis loading
     setError(null);
     setAnalysisResult(null);
+    console.log("Starting AI analysis..."); // Log start
 
     try {
       // Pass both image data URI and the current description state
       const result = await analyzeIssueImage({ imageDataUri, description });
+      console.log("AI Analysis result:", result); // Log result
 
       // Validate received data
+      if (!result || typeof result !== 'object') {
+          throw new Error("Invalid response received from AI analysis.");
+      }
+
       if (!issueTypes.includes(result.detectedType)) {
            console.warn(`AI detected type "${result.detectedType}" is invalid. Defaulting to "Other".`);
            result.detectedType = "Other";
@@ -193,22 +256,29 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         description: `Detected: ${result.detectedType}, Priority: ${result.suggestedPriority}`,
       });
     } catch (err) {
-      console.error('AI analysis failed:', err);
+      console.error('AI analysis failed:', err); // Log the full error
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during analysis.';
-      setError(`Analysis failed: ${errorMessage}`);
-      toast({
-        variant: 'destructive',
-        title: 'Analysis Failed',
-        description: errorMessage,
-      });
+      // Check for specific API key error message
+      if (errorMessage.includes("API key not valid")) {
+           setError("Analysis failed: Invalid API Key. Please check your GOOGLE_GENAI_API_KEY environment variable.");
+           toast({ variant: 'destructive', title: 'API Key Error', description: "Invalid Google AI API Key.", duration: 10000 });
+      } else {
+           setError(`Analysis failed: ${errorMessage}`);
+           toast({ variant: 'destructive', title: 'Analysis Failed', description: errorMessage, duration: 10000 });
+      }
     } finally {
       setIsLoading(false); // Stop analysis loading
+      console.log("AI analysis finished."); // Log finish
     }
   };
 
    // Navigate to report page with AI results
    const handleUseDetails = () => {
-        if (!analysisResult || !capturedImage) return;
+        if (!analysisResult || !capturedImage) {
+            console.error("Attempted to use details without analysis result or captured image.");
+            setError("Cannot proceed without a successful analysis and an image.");
+            return;
+        }
 
         try {
              // Store the large image Data URI in sessionStorage
@@ -237,8 +307,14 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         // Navigate to the report page with the query parameters
         const reportUrl = `/citizen/dashboard/report?${query.toString()}`;
         console.log("Navigating to:", reportUrl);
-        router.push(reportUrl);
-        onClose(); // Close the dialog after navigation
+        try {
+           router.push(reportUrl);
+           onClose(); // Close the dialog after initiating navigation
+        } catch(navigationError) {
+            console.error("Error during navigation:", navigationError);
+            setError("Failed to navigate to the report page.");
+             toast({ variant: 'destructive', title: 'Navigation Error', description: 'Could not open the report form.' });
+        }
     };
 
   // Reset state to start over
@@ -249,6 +325,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
       setIsLoading(false);
       setIsCapturing(false);
       setDescription(''); // Reset description as well
+      console.log("State reset."); // Log reset
 
       // Clear stored image from session storage if it exists
        try {
@@ -261,20 +338,30 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
 
       // Restart camera if permission was granted and it's not already running
       if (hasCameraPermission && !mediaStreamRef.current) {
+          console.log("Attempting to restart camera...");
           if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
              try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                  mediaStreamRef.current = stream;
                  if (videoRef.current) {
                      videoRef.current.srcObject = stream;
+                     console.log("Camera stream restarted.");
+                 } else {
+                    console.warn("Video ref not available on camera restart attempt.");
                  }
              } catch (err) {
                  console.error("Error restarting camera:", err);
                  setError('Could not restart camera.');
                  setHasCameraPermission(false); // Assume permission issue if restart fails
+                 toast({ variant: 'destructive', title: 'Camera Error', description: 'Could not restart camera.' });
              }
           }
+      } else if (hasCameraPermission && mediaStreamRef.current) {
+          console.log("Camera already running.");
+      } else if (!hasCameraPermission) {
+          console.log("Camera permission not granted, cannot restart.");
       }
+
       // Reset file input value as well
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -288,19 +375,21 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept="image/*"
+        accept="image/*" // Accept common image types
         style={{ display: 'none' }}
       />
 
-      {error && !isLoading && !isCapturing && ( // Show error only when not loading/capturing
+      {/* Display general errors prominently */}
+      {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+           <Button variant="outline" size="sm" onClick={resetState} className="mt-2">Try Again</Button>
         </Alert>
       )}
 
-      {!capturedImage ? (
+      {!capturedImage && !error ? ( // Only show camera/upload if no image and no critical error
         // Camera View or Upload Prompt
         <Card>
           <CardContent className="p-4 space-y-4">
@@ -319,7 +408,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
              />
 
              {/* Show placeholder if camera permission denied or not yet determined */}
-              {hasCameraPermission === false && (
+              {hasCameraPermission === false && !error && ( // Don't show placeholder if there's a different error
                    <div className="w-full aspect-video rounded-md bg-muted flex flex-col items-center justify-center text-muted-foreground text-center p-4">
                        <Camera className="h-12 w-12 opacity-50 mb-2" />
                        <p className="text-sm">Camera access denied or unavailable.</p>
@@ -339,7 +428,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : capturedImage && !error ? ( // Only show analysis view if image captured and no critical error
         // Analysis View
         <Card>
           <CardContent className="p-4 space-y-4">
@@ -350,7 +439,7 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
                    alt="Captured issue"
                    width={400} // Provide width/height or use layout="fill" with sized parent
                    height={300}
-                   className="object-contain" // Ensure image fits within bounds
+                   className="object-contain max-h-[300px]" // Ensure image fits within bounds and max height
                    unoptimized // Use this if the src is a data URI to avoid Next.js optimization attempts
                  />
             </div>
@@ -402,33 +491,16 @@ const AiAnalysisComponent: React.FC<AiAnalysisComponentProps> = ({ onClose }) =>
               </div>
             )}
 
-             {/* Show error specific to analysis failure */}
-            {!isLoading && error && capturedImage && (
-                <Alert variant="destructive" className="mt-4">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Analysis Error</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
-                </Alert>
-            )}
-
-
             {/* Action Buttons */}
             <div className="flex justify-center gap-4 pt-4 border-t mt-4">
               {/* Start Over Button */}
               <Button variant="outline" onClick={resetState} disabled={isLoading || isCapturing}>
                  <RotateCcw className="mr-2 h-4 w-4" /> Start Over
               </Button>
-               {/* Re-analyze button (only shown if analysis failed or no result yet) */}
-               {/* {!isLoading && capturedImage && (error || !analysisResult) && (
-                 <Button onClick={() => handleAnalysis(capturedImage)} disabled={isLoading || isCapturing}>
-                     {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-                     {isLoading ? 'Analyzing...' : 'Re-Analyze'}
-                 </Button>
-               )} */}
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null } {/* Render nothing if image is captured but there's an error */}
 
       {/* Close Button */}
       <div className="flex justify-end mt-4">
